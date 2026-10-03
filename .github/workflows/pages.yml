@@ -1,0 +1,60 @@
+# Builds every game of games.json from source (no ROMs needed), verifies it, renders
+# its audio, writes the viewers plus the hub page and deploys them to GitHub Pages.
+name: Site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [game-updated]
+  schedule:
+    - cron: '17 3 * * *'          # nightly, picks up pushes to the game repositories
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Python packages
+        run: pip install numpy
+
+      - name: RGBDS
+        run: |
+          mkdir -p "$HOME/rgbds"
+          curl -sSL https://github.com/gbdev/rgbds/releases/download/v1.0.1/rgbds-linux-x86_64.tar.xz | tar -xJ -C "$HOME/rgbds"
+          dirname "$(find "$HOME/rgbds" -name rgbasm -type f | head -1)" >> "$GITHUB_PATH"
+
+      - name: ffmpeg
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+
+      - name: Build all games and the hub
+        run: python tools/ci_build.py games.json _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,2083 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gbbolt</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --panel2: #f0f2f5; --border: #d9dde4; --text: #1d2330; --muted: #5d6678;
+  --accent: #2563eb; --ok: #1a7f37; --chk: #9a6700; --fail: #cf222e; --stale: #8250df; --codec: #a9b8d3; --datac: #e3e6eb;
+  --kw: #8250df; --num: #b35900; --com: #6e7781; --fn: #0550ae; --var: #8a5a00; --const: #0a7f8a; --reg: #c4314b; --mn: #2f7d32; --str: #0a7f8a;
+  --tint: 0.13; --hot: 0.32;
+  --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, Menlo, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --panel: #161a21; --panel2: #1c212b; --border: #2a303c; --text: #d7dce5; --muted: #8a93a6;
+    --accent: #6aa9ff; --ok: #3fb950; --chk: #d29922; --fail: #f85149; --stale: #a371f7; --codec: #34445e; --datac: #232832;
+    --kw: #c678dd; --num: #d19a66; --com: #6a7385; --fn: #61afef; --var: #e5c07b; --const: #56b6c2; --reg: #e06c75; --mn: #98c379; --str: #56b6c2;
+    --tint: 0.11; --hot: 0.30;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --panel: #161a21; --panel2: #1c212b; --border: #2a303c; --text: #d7dce5; --muted: #8a93a6;
+  --accent: #6aa9ff; --ok: #3fb950; --chk: #d29922; --fail: #f85149; --stale: #a371f7; --codec: #34445e; --datac: #232832;
+  --kw: #c678dd; --num: #d19a66; --com: #6a7385; --fn: #61afef; --var: #e5c07b; --const: #56b6c2; --reg: #e06c75; --mn: #98c379; --str: #56b6c2;
+  --tint: 0.11; --hot: 0.30;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); display: flex; flex-direction: column; overflow: hidden; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+header { display: flex; align-items: center; gap: 14px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.brand { font-weight: 700; letter-spacing: .2px; font-size: 15px; }
+.brand span { color: var(--muted); font-weight: 500; }
+#gamesel { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
+nav { display: flex; gap: 2px; flex-wrap: wrap; }
+nav a { padding: 5px 11px; border-radius: 6px; color: var(--muted); font-weight: 500; }
+nav a:hover { background: var(--panel2); text-decoration: none; color: var(--text); }
+nav a.on { background: var(--panel2); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+.spacer { flex: 1; }
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: var(--panel2); white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.st-verified { --c: var(--ok); } .st-checked { --c: var(--chk); } .st-failing { --c: var(--fail); } .st-stale { --c: var(--stale); } .st-none { --c: var(--codec); } .st-data { --c: var(--datac); }
+.dot { background: var(--c, var(--muted)); }
+.badge.st-verified, .badge.st-checked, .badge.st-failing, .badge.st-stale { color: var(--c); border-color: color-mix(in srgb, var(--c) 45%, transparent); }
+input[type=search], input[type=text] { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; font: inherit; min-width: 0; }
+button, .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button.on { border-color: var(--accent); color: var(--accent); }
+.seg { display: inline-flex; } .seg button { border-radius: 0; } .seg button:first-child { border-radius: 6px 0 0 6px; } .seg button:last-child { border-radius: 0 6px 6px 0; } .seg button + button { margin-left: -1px; } .seg button.on { position: relative; z-index: 1; }   /* shared borders; the selected one on top */
+main { flex: 1; min-height: 0; display: flex; }
+.view { flex: 1; min-width: 0; display: none; }
+.view.on { display: flex; }
+
+/* code view */
+#sidebar { width: 270px; flex: none; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--panel); }
+#sidebar .tools { padding: 8px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border); }
+#sidebar .chips { display: flex; gap: 4px; flex-wrap: wrap; }
+#sidebar .chips button { font-size: 12px; padding: 2px 8px; }
+#fnlist { overflow: auto; flex: 1; font: 12.5px/1.2 var(--mono); }
+#fnlist a { display: flex; align-items: center; gap: 7px; padding: 4px 10px; color: var(--text); white-space: nowrap; }
+#fnlist a:hover { background: var(--panel2); text-decoration: none; }
+#fnlist a.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+#fnlist .ad { color: var(--muted); }
+#fnlist summary { display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px calc(10px + var(--d, 0) * 14px); cursor: pointer;
+  list-style: none; font: 600 12.5px var(--sans); color: var(--text); user-select: none; white-space: nowrap; }
+#fnlist summary::-webkit-details-marker { display: none; }
+#fnlist summary::before { content: '▸'; color: var(--muted); width: 10px; flex: none; }
+#fnlist details[open] > summary::before { content: '▾'; }
+#fnlist summary:hover { background: var(--panel2); }
+#fnlist summary .cnt { color: var(--muted); font-weight: 400; margin-left: auto; font-size: 11.5px; }
+#fnlist details a { padding-left: calc(26px + var(--d, 0) * 14px); }
+#card .crumb { font: 12px var(--mono); color: var(--muted); margin-bottom: 2px; }
+#card .crumb a { color: var(--muted); } #card .crumb a:hover { color: var(--accent); }
+#fnlist .nm { overflow: hidden; text-overflow: ellipsis; }
+#fnlist a.data .nm { color: var(--muted); }
+#codemain { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+#card { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--panel); flex: none; }
+#card details { margin-top: 8px; }
+#card summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--muted); user-select: none; width: fit-content; }
+#card summary span { font-weight: 400; margin-left: 6px; }
+#card summary:hover { color: var(--text); }
+#card h1 { font: 600 18px var(--mono); margin: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#card .meta { color: var(--muted); font-size: 12.5px; }
+#card .sig { font-family: var(--mono); font-size: 13px; margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chip { display: inline-flex; gap: 4px; align-items: center; padding: 1px 7px; border-radius: 5px; background: var(--panel2); border: 1px solid var(--border); font: 12px var(--mono); white-space: nowrap; }
+.chip b { color: var(--reg); font-weight: 600; }
+#card .doc { margin: 8px 0 4px; max-width: 900px; }
+#card .rows { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; font-size: 12.5px; margin-top: 8px; align-items: baseline; }
+#card .rows > div:nth-child(odd) { color: var(--muted); }
+.vbox { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--panel2); font-size: 12.5px; }
+.vbox .ttl { font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.vbox ul { margin: 4px 0 0; padding-left: 18px; }
+.vbox li.err { color: var(--fail); } .vbox li.warn { color: var(--chk); } .vbox li.info { color: var(--muted); }
+.vbox table { border-collapse: collapse; margin-top: 6px; font: 12px var(--mono); }
+.vbox td, .vbox th { padding: 2px 10px 2px 0; text-align: left; }
+#panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, var(--lw, 1fr)) 7px minmax(0, var(--rw, 1fr)); grid-template-rows: minmax(0, 1fr); }
+.pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+#splitter { cursor: col-resize; background: linear-gradient(var(--border), var(--border)) center / 1px 100% no-repeat; touch-action: none; }
+#splitter:hover, #splitter.drag { background: linear-gradient(var(--accent), var(--accent)) center / 3px 100% no-repeat; }
+body.resizing { cursor: col-resize; user-select: none; }
+.panehead { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--border); background: var(--panel); font-size: 12px; color: var(--muted); }
+.panehead .t { font-weight: 600; color: var(--text); }
+.src { flex: 1; overflow: auto; font: 13px/1.55 var(--mono); font-variant-ligatures: none; padding: 6px 0 40px; tab-size: 4; }
+.ln { display: flex; white-space: pre; padding: 0 10px 0 0; border-left: 3px solid transparent; min-height: 1.55em; }
+.ln[data-g] { background: hsla(var(--h), 75%, 55%, var(--tint)); border-left-color: hsla(var(--h), 75%, 55%, .55); }
+.ln.hot { background: hsla(var(--h), 80%, 55%, var(--hot)); border-left-color: hsl(var(--h), 80%, 55%); }
+#panes.nocolor .ln[data-g]:not(.hot) { background: none; border-left-color: transparent; }   /* colours off */
+/* clicked group: one outline around each run of consecutive rows */
+.ln.pin-top { box-shadow: inset 0 1px hsl(var(--h), 70%, 45%); }
+.ln.pin-bot { box-shadow: inset 0 -1px hsl(var(--h), 70%, 45%); }
+.ln.pin-top.pin-bot { box-shadow: inset 0 1px hsl(var(--h), 70%, 45%), inset 0 -1px hsl(var(--h), 70%, 45%); }
+.src .ln[data-g] { cursor: pointer; }
+.ln .no { color: var(--muted); opacity: .55; width: 3.2em; text-align: right; padding-right: 12px; flex: none; user-select: none; }
+.ln .ad { color: var(--muted); width: 4.2em; flex: none; padding-left: 8px; user-select: none; }
+.ln .by { color: var(--muted); opacity: .75; width: 9.5em; flex: none; overflow: hidden; user-select: none; }
+.lines { width: max-content; min-width: 100%; }   /* every row as wide as the widest code */
+.ln .tx { flex: none; }
+/* comments wrap inside the visible width, continuing under their first character;
+   contain: inline-size keeps them from widening the rows */
+.ln .cm { flex: 1 1 0; min-width: 8ch; contain: inline-size; white-space: pre-wrap; overflow-wrap: anywhere; }
+.hidebytes .ln .by { display: none; }
+.ln.lbl .tx { color: var(--fn); font-weight: 600; }
+.ln.xr { opacity: .6; border-left: 3px dashed var(--border); }   /* belongs to another function */
+.ln .xref { margin-left: 14px; font: 11.5px var(--sans); color: var(--accent); white-space: nowrap; }
+.ln.sep { margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 4px; }
+.ln.sep .tx { font: italic 12px var(--sans); color: var(--muted); padding-left: 12px; }
+.placeholder { padding: 16px 18px; color: var(--muted); font: 13px/1.6 var(--sans); }
+.placeholder pre { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text); font: 12.5px/1.5 var(--mono); overflow: auto; }
+.k-kw { color: var(--kw); } .k-num { color: var(--num); } .k-com { color: var(--com); font-style: italic; } .k-str { color: var(--str); }
+.k-fn { color: var(--fn); } .k-var { color: var(--var); } .k-const { color: var(--const); } .k-reg { color: var(--reg); } .k-mn { color: var(--mn); } .k-help { color: var(--const); text-decoration: underline dotted; }
+a.k-fn, a.k-var { text-decoration: none; } a.k-fn:hover, a.k-var:hover { text-decoration: underline; }
+
+/* book */
+#book { flex: 1; display: flex; min-width: 0; }
+#toc { display: block; width: 240px; flex: none; overflow: auto; border-right: 1px solid var(--border); background: var(--panel); padding: 10px 0; font: 12.5px/1.3 var(--mono); }
+#toc a { display: flex; gap: 7px; align-items: center; padding: 3px 12px 3px calc(12px + var(--d, 0) * 12px); color: var(--text); }
+#toc a.chap { font: 600 12.5px var(--sans); margin-top: 8px; color: var(--text); }
+#toc a.chap .no { color: var(--muted); font-weight: 400; }
+.bchap { max-width: 980px; margin: 34px 0 14px; scroll-margin-top: 10px; }
+.bchap h2 { font: 700 20px var(--sans); margin: 0; } .bchap h3 { font: 700 16px var(--sans); margin: 0; } .bchap h4 { font: 600 14px var(--sans); margin: 0; }
+.bchap .no { color: var(--muted); font-weight: 400; margin-right: 8px; }
+.bchap p { margin: 4px 0 0; color: var(--muted); }
+#bookbody { flex: 1; overflow: auto; padding: 18px 28px 80px; }
+#bookbody .intro { max-width: 820px; color: var(--muted); margin-bottom: 18px; }
+.bfn { max-width: 980px; margin: 0 0 26px; scroll-margin-top: 10px; }
+.bfn h2 { font: 600 15px var(--mono); margin: 0 0 4px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bfn h2 .ad { color: var(--muted); font-weight: 400; }
+.bfn pre { font-variant-ligatures: none; margin: 6px 0 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font: 13px/1.55 var(--mono); overflow: auto; }
+
+/* coverage */
+.scroll { flex: 1; overflow: auto; padding: 18px 24px 60px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; max-width: 1200px; }
+.tile { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.tile .v { font: 600 26px var(--sans); font-variant-numeric: tabular-nums; }
+.tile .l { color: var(--muted); font-size: 12.5px; }
+.bar { height: 8px; border-radius: 4px; background: var(--panel2); overflow: hidden; display: flex; margin-top: 8px; }
+.bar i { display: block; height: 100%; }
+h3 { font-size: 14px; margin: 26px 0 8px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin: 6px 0; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+#rommap { image-rendering: pixelated; border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; max-width: 100%; }
+#maptip { font: 12.5px var(--mono); color: var(--muted); min-height: 1.4em; }
+table.grid { border-collapse: collapse; font-size: 12.5px; width: 100%; max-width: 1200px; }
+table.grid th { text-align: left; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); padding: 5px 8px; position: sticky; top: 0; background: var(--bg); z-index: 1; }
+.scroll table.grid th { top: -18px; }   /* stick to the very top, over the scroll area's padding */
+table.grid td { border-bottom: 1px solid var(--border); padding: 4px 8px; vertical-align: top; }
+table.grid td.m { font-family: var(--mono); white-space: nowrap; }
+table.grid tr.sel td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.links a { font-family: var(--mono); font-size: 12px; margin-right: 8px; white-space: nowrap; }
+
+/* graph */
+#graphwrap { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#graphbar { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; font-size: 13px; }
+#graph { flex: 1; min-height: 0; position: relative; overflow: hidden; cursor: grab; }
+#graph svg { width: 100%; height: 100%; display: block; }
+#graph .node rect { fill: var(--panel); stroke: var(--c); stroke-width: 1.5; rx: 6; }
+#graph .node text { font: 12px var(--mono); fill: var(--text); dominant-baseline: middle; text-anchor: middle; pointer-events: none; }
+#graph .node { cursor: pointer; }
+#graph .node.focus rect { stroke-width: 3; fill: color-mix(in srgb, var(--accent) 18%, var(--panel)); }
+#graph .node.dim { opacity: .25; }
+#graph path.e { fill: none; stroke: var(--muted); stroke-opacity: .45; stroke-width: 1.2; }
+#graph path.e.jump { stroke-dasharray: 5 4; }
+#graph path.e.table { stroke-dasharray: 2 3; }
+#graph path.e.fallthrough { stroke-width: 2.4; stroke-opacity: .35; }
+#graph path.e.hot { stroke: var(--accent); stroke-opacity: 1; stroke-width: 2; }
+#graph path.e.dim { stroke-opacity: .08; }
+#ginfo { position: absolute; right: 12px; top: 12px; width: 280px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; display: none; max-height: calc(100% - 24px); overflow: auto; }
+
+/* ram */
+.memwrap { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+.hram { display: grid; grid-template-columns: repeat(16, 22px); gap: 2px; }
+.hram div { height: 22px; border-radius: 3px; background: var(--panel2); border: 1px solid var(--border); font: 9px var(--mono); color: var(--muted); display: flex; align-items: center; justify-content: center; cursor: default; }
+.hram div.named { background: hsla(var(--h), 65%, 50%, .45); border-color: hsla(var(--h), 65%, 50%, .9); color: var(--text); cursor: pointer; }
+.hram div.unnamed { background: color-mix(in srgb, var(--chk) 30%, transparent); border-color: var(--chk); cursor: pointer; }
+.hram div.sel { outline: 2px solid var(--accent); }
+#wram { image-rendering: pixelated; border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; }
+.kbd { font: 12px var(--mono); background: var(--panel2); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
+/* assets */
+.agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; max-width: 1400px; }
+.acard { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; color: var(--text); display: flex; flex-direction: column; }
+.acard:hover { border-color: var(--accent); text-decoration: none; }
+.acard .pv { height: 170px; display: flex; align-items: center; justify-content: center; background: var(--panel2); padding: 10px; overflow: hidden; }
+.acard .pv canvas { max-width: 100%; max-height: 150px; width: auto; height: auto; min-width: 0; }
+.acard .pv canvas.px { width: 100%; height: 100%; object-fit: contain; }
+.acard .cap { padding: 8px 10px; font-size: 12.5px; }
+.acard .cap b { font-family: var(--mono); font-weight: 600; }
+.acard .cap div { color: var(--muted); }
+canvas.px { image-rendering: pixelated; image-rendering: crisp-edges; }
+.adetail { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.astage { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: inline-block; max-width: 100%; overflow: auto; }
+.ameta { min-width: 260px; flex: 1; max-width: 560px; font-size: 13px; }
+.hexdump { font: 12px/1.5 var(--mono); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; overflow: auto; max-width: 100%; white-space: pre; }
+table.kv { border-collapse: collapse; font-size: 13px; }
+table.kv td { padding: 4px 14px 4px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.kv td:first-child { color: var(--muted); white-space: nowrap; }
+table.kv td.m { font-family: var(--mono); word-break: break-all; }
+.okv { color: var(--ok); font-weight: 600; } .badv { color: var(--fail); font-weight: 600; }
+.hdrmini { font: 12px/1.6 var(--mono); color: var(--text); }
+/* music view */
+#v-music { min-width: 0; }
+#mlist { width: 250px; flex: none; overflow: auto; border-right: 1px solid var(--border); background: var(--panel); padding: 8px 0; font-size: 13px; }
+#mlist .grp { font: 600 11.5px var(--sans); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 12px 12px 4px; }
+#mlist a { display: flex; gap: 8px; align-items: baseline; padding: 4px 12px; color: var(--text); }
+#mlist a:hover { background: var(--panel2); text-decoration: none; }
+#mlist a.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+#mlist a .id { font: 11.5px var(--mono); color: var(--muted); flex: none; width: 2.2em; }
+#mlist a .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#mlist a .du { font: 11px var(--mono); color: var(--muted); }
+#mmain { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#mhead { display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; }
+.mbig { width: 42px; height: 42px; border-radius: 50%; border: none; background: var(--accent); color: var(--panel); display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; flex: none; }
+.mbig svg { width: 16px; height: 16px; fill: currentColor; }
+#mtitle { min-width: 180px; }
+#mtitle b { font-size: 15px; }
+#mtitle div { color: var(--muted); font-size: 12px; }
+#mtrans { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 10px; }
+#mtrans .track { flex: 1; height: 18px; position: relative; cursor: pointer; touch-action: none; }
+#mtrans .track::before { content: ''; position: absolute; left: 0; right: 0; top: 7px; height: 4px; border-radius: 2px; background: var(--border); }
+#mtrans .fill { position: absolute; left: 0; top: 7px; height: 4px; border-radius: 2px; background: var(--accent); width: 0; }
+#mtrans .knob { position: absolute; top: 3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--accent); left: 0; }
+#mtrans .loopmark { position: absolute; top: 2px; width: 2px; height: 14px; background: var(--chk); }
+#mtrans .tm { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4.5ch; }
+#mstrips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg); }
+.strip { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; border-top: 3px solid var(--cc); min-width: 0; transition: opacity .15s; }
+.strip.quiet { opacity: .45; }
+.strip .hd { display: flex; align-items: center; gap: 6px; font: 600 12.5px var(--sans); }
+.strip .hd .sp { flex: 1; }
+.strip .hd button { font: 600 11px var(--sans); padding: 1px 7px; }
+.strip .hd button.mute.on { background: var(--fail); border-color: var(--fail); color: var(--panel); }
+.strip .hd button.solo.on { background: var(--chk); border-color: var(--chk); color: var(--panel); }
+.strip .row1 { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; height: 30px; }
+.strip .note { font: 700 24px var(--mono); color: var(--cc); min-width: 2.6em; line-height: 1.1; }
+.strip .hz { font: 11.5px var(--mono); color: var(--muted); }
+.strip .meter { display: flex; gap: 2px; margin: 6px 0 4px; }
+.strip .meter i { flex: 1; height: 7px; border-radius: 2px; background: var(--panel2); }
+.strip .meter i.on { background: var(--cc); }
+/* every part has a fixed height, so the strips (and the roll below) never move when a channel goes quiet */
+.strip .info { display: flex; align-items: center; gap: 8px; font: 11.5px var(--mono); color: var(--muted); height: 26px; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
+.strip .info svg { width: 54px; height: 22px; flex: none; }
+.strip .info svg path { fill: none; stroke: var(--cc); stroke-width: 1.6; }
+.strip .lr { display: inline-flex; gap: 3px; margin-left: auto; }
+.strip .lr span { font: 600 10px var(--sans); width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--panel2); color: var(--muted); }
+.strip .lr span.on { background: var(--cc); color: var(--panel); }
+.strip .own { font: 11.5px var(--sans); color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 16px; }
+.strip .own.fx { color: var(--chk); font-weight: 600; }
+#mstruct { padding: 6px 16px 6px 60px; border-bottom: 1px solid var(--border); background: var(--panel); position: relative; }
+#mstruct:empty { display: none; }
+#mstruct .srow { position: relative; height: 13px; margin: 2px 0; }
+#mstruct .srow .lbl { position: absolute; left: -44px; font: 10px var(--mono); color: var(--muted); top: 0; }
+#mstruct .sec { position: absolute; top: 0; height: 12px; border-radius: 3px; background: hsla(var(--h), 60%, 50%, var(--a)); font: 9.5px var(--mono); color: var(--text); overflow: hidden; white-space: nowrap; padding-left: 3px; cursor: pointer; box-sizing: border-box; border-right: 1px solid var(--panel); }
+#mstruct .ph { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fail); pointer-events: none; }
+#mstage { flex: 1; min-height: 0; position: relative; background: var(--panel); }
+#mroll { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+#mtracker { position: absolute; inset: 0; overflow: auto; display: none; font: 12.5px var(--mono); }
+#mtracker table { border-collapse: collapse; width: 100%; }
+#mtracker th { position: sticky; top: 0; background: var(--panel); text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font: 600 12px var(--sans); }
+#mtracker td { padding: 2px 10px; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); white-space: nowrap; cursor: pointer; }
+#mtracker td.t { color: var(--muted); }
+#mtracker td .n { color: var(--cc); font-weight: 700; display: inline-block; min-width: 3.2em; }
+#mtracker td .x { color: var(--muted); }
+#mtracker td.fx { background: color-mix(in srgb, var(--chk) 10%, transparent); }
+#mtracker tr.cur td { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+#mtip { position: absolute; display: none; pointer-events: none; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font: 12px var(--mono); box-shadow: 0 4px 16px rgba(0, 0, 0, .15); z-index: 5; white-space: nowrap; }
+#mtip b { color: var(--cc); }
+.ln.target { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (max-width: 900px) { #mlist { display: none; } #mstrips { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* audio player */
+.player { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.player .pp { width: 34px; height: 34px; border-radius: 50%; padding: 0; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent); border: none; color: var(--panel); cursor: pointer; }
+.player .pp:hover { filter: brightness(1.1); }
+.player .pp svg { width: 14px; height: 14px; fill: currentColor; }
+.player .track { flex: 1; height: 18px; position: relative; cursor: pointer; touch-action: none; }
+.player .track::before { content: ''; position: absolute; left: 0; right: 0; top: 7px; height: 4px; border-radius: 2px; background: var(--border); }
+.player .fill { position: absolute; left: 0; top: 7px; height: 4px; border-radius: 2px; background: var(--accent); width: 0; }
+.player .knob { position: absolute; top: 3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--accent); left: 0;
+  opacity: 0; transition: opacity .15s; }
+.player:hover .knob, .player.playing .knob { opacity: 1; }
+.player .tm { font: 11.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4.2ch; text-align: right; }
+.player .tm.el { text-align: left; }
+
+/* focus mode: only the two panes; the sidebar slides in over them */
+.focusonly { display: none; }
+body.focus .focusonly { display: inline-flex; }
+body.focus header, body.focus #card { display: none; }
+body.focus #sidebar { display: none; }
+body.focus.drawer #sidebar { display: flex; position: fixed; left: 0; top: 0; bottom: 0; z-index: 20; box-shadow: 4px 0 24px rgba(0, 0, 0, .25); }
+#focusname { font: 600 13px var(--mono); color: var(--text); margin-right: 6px; }
+#focusbtn.on { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 900px) {
+  #sidebar { display: none; }
+  #panes { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  #splitter { display: none; }
+  #toc { display: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">gbbolt <span id="gametitle"></span></div>
+  <nav id="nav">
+    <a href="#/code" data-v="code">Code</a>
+    <a href="#/book" data-v="book">Book</a>
+    <a href="#/coverage" data-v="coverage">Coverage</a>
+    <a href="#/graph" data-v="graph">Call graph</a>
+    <a href="#/ram" data-v="ram">RAM map</a>
+    <a href="#/assets" data-v="assets">Assets</a>
+    <a href="#/music" data-v="music">Music</a>
+  </nav>
+  <div class="spacer"></div>
+  <input type="search" id="search" placeholder="Jump to function or variable…" list="names" style="width:260px">
+  <datalist id="names"></datalist>
+  <span id="buildbadge" class="badge"></span>
+  <button id="theme" title="Toggle light/dark">◐</button>
+</header>
+<main>
+  <section class="view" id="v-code">
+    <aside id="sidebar">
+      <div class="tools">
+        <div style="display:flex;gap:6px"><input type="search" id="fnfilter" placeholder="Filter…" style="flex:1"><span class="seg" id="sidemode"><button data-m="tree" title="folders">tree</button><button data-m="list" title="ROM order">list</button></span></div>
+        <div class="chips" id="fnchips">
+          <button data-f="all" class="on">All</button>
+          <button data-f="code">Code</button>
+          <button data-f="todo">To do</button>
+          <button data-f="data">Data</button>
+        </div>
+      </div>
+      <div id="fnlist"></div>
+    </aside>
+    <div id="codemain">
+      <div id="card"></div>
+      <div id="panes">
+        <div class="pane">
+          <div class="panehead"><button id="drawerbtn" class="focusonly" title="functions (tree / list)">☰</button><span id="focusname" class="focusonly"></span><span class="t">Pseudo-code</span><span id="pmode" class="seg"><button data-m="py" class="on">Python</button><button data-m="c">C-style</button></span><span class="spacer"></span><span>hover a line to see its instructions</span></div>
+          <div class="src" id="psrc"></div>
+        </div>
+        <div id="splitter" title="drag to resize"></div>
+        <div class="pane">
+          <div class="panehead"><span class="t">Assembly</span><span id="asmrange"></span><span class="spacer"></span><button id="colorbtn" title="tint every line with its group colour (off: only the hovered or clicked group)">colours</button><button id="bytesbtn" class="on">bytes</button><button id="focusbtn" title="focus mode: just the two panes (Esc leaves)">⛶</button></div>
+          <div class="src" id="asrc"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="view" id="v-book">
+    <div id="book"><nav id="toc"></nav><div id="bookbody"></div></div>
+  </section>
+  <section class="view" id="v-coverage"><div class="scroll" id="coverage"></div></section>
+  <section class="view" id="v-graph">
+    <div id="graphwrap">
+      <div id="graphbar">
+        <span class="seg" id="gmode"><button data-m="all" class="on">Whole program</button><button data-m="nb">Neighbourhood</button></span>
+        <label id="gdepthl">depth <select id="gdepth"><option>1</option><option selected>2</option><option>3</option></select></label>
+        <label id="gfolderl">folder <select id="gfolder"></select></label>
+        <span id="gfocus" style="font-family:var(--mono)"></span>
+        <span class="spacer"></span>
+        <div class="legend" style="margin:0">
+          <span><i style="background:var(--ok)"></i>verified</span><span><i style="background:var(--chk)"></i>checked</span><span><i style="background:var(--fail)"></i>failing</span><span><i style="background:var(--codec)"></i>not annotated</span>
+          <span>— call</span><span>- - jump</span><span>··· table</span><span>━ falls through</span>
+        </div>
+        <button id="gfit">Fit</button>
+      </div>
+      <div id="graph"><svg id="gsvg"><g id="gview"></g></svg><div id="ginfo"></div></div>
+    </div>
+  </section>
+  <section class="view" id="v-ram"><div class="scroll" id="ram"></div></section>
+  <section class="view" id="v-assets"><div class="scroll" id="assets"></div></section>
+  <section class="view" id="v-music">
+    <aside id="mlist"></aside>
+    <div id="mmain">
+      <div id="mhead">
+        <button id="mplay" class="mbig" aria-label="play"></button>
+        <div id="mtitle"></div>
+        <div id="mtrans"><span class="tm" id="mel">0:00</span><div class="track" id="mtrack"><div class="fill"></div><div class="knob"></div></div><span class="tm" id="mleft">-0:00</span></div>
+        <span class="seg" id="mviewsel"><button data-v="roll" class="on">piano roll</button><button data-v="tracker">tracker</button></span>
+        <span class="seg" id="mzoom"><button data-z="-1" title="zoom out">−</button><button data-z="1" title="zoom in">+</button></span>
+      </div>
+      <div id="mstrips"></div>
+      <div id="mstruct"></div>
+      <div id="mstage"><canvas id="mroll"></canvas><div id="mtracker"></div><div id="mtip"></div></div>
+    </div>
+  </section>
+</main>
+<script>
+const D = /*__GBBOLT_DATA__*/null;
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const hex4 = a => '$' + a.toString(16).toUpperCase().padStart(4, '0');
+const U = new Map(D.units.map(u => [u.n, u]));
+const V = new Map(D.vars.map(v => [v.name, v]));
+const CODE_UNITS = D.units.filter(u => u.k === 'code');
+const ANN = D.units.filter(u => u.def);
+const STATUS_TEXT = {verified: 'verified', checked: 'checked', failing: 'failing', stale: 'stale', none: 'not annotated'};
+const REG8 = new Set('a b c d e h l f'.split(' ')), REG16 = new Set(['bc', 'de', 'hl', 'af', 'sp']);
+const PYKW = new Set('def if elif else for while in not and or return break continue pass True False None lambda is'.split(' '));
+const ASMREG = new Set([...REG8, ...REG16, 'hli', 'hld', 'nz', 'z', 'nc', 'c', 'hl+', 'hl-']);
+const statusOf = u => u.k === 'data' ? 'data' : (u.st || 'none');
+// facts about the game from game.json (all optional)
+const G = D.game || {};
+const ENTRY = G.entry && U.has(G.entry) ? G.entry : (ANN[0] || D.units[0]).n;           // first function shown
+const GRAPH_ROOT = G.graphRoot && U.has(G.graphRoot) ? G.graphRoot : ENTRY;              // default graph focus
+// virtual folders (`;@ path:`), in reading order
+const FOLDERS = D.folders || [];
+const FOLDER_DESC = new Map(FOLDERS.map(f => [f.path, f.desc]));
+const inFolder = (p, f) => !f || p === f || (p || '').startsWith(f + '/');
+const parentOf = f => f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '';
+const childFolders = f => FOLDERS.map(x => x.path).filter(x => parentOf(x) === f);
+let pmode = localStorage.getItem('gbbolt.pmode') || 'py';
+
+document.title = 'gbbolt · ' + D.title;
+$('#gametitle').textContent = '· ' + D.title;
+// built for a hub with several games: the title becomes a game selector, "gbbolt" links to the hub
+if ((D.games || []).length) $('.brand').innerHTML = `<a href="../" title="all games" style="color:inherit">gbbolt</a> ` + $('.brand span').outerHTML;
+if ((D.games || []).length > 1) {
+  $('#gametitle').innerHTML = '· <select id="gamesel" title="switch game">' + D.games.map(g =>
+    `<option value="${esc(g.id)}"${g.id === D.gameId ? ' selected' : ''}>${esc(g.title)}</option>`).join('') + '</select>';
+  $('#gamesel').onchange = e => { location.href = '../' + encodeURIComponent(e.target.value) + '/'; };
+}
+$('#buildbadge').innerHTML = D.build.ok
+  ? `<span class="dot" style="background:var(--ok)"></span>ROM matches · sha1 ${D.build.sha1.slice(0, 8)}`
+  : `<span class="dot" style="background:var(--fail)"></span>build differs`;
+$('#buildbadge').title = D.build.msg;
+$('#names').innerHTML = [...D.units.map(u => u.n), ...D.vars.filter(v => v.type !== 'io').map(v => v.name)]
+  .map(n => `<option value="${esc(n)}">`).join('');
+
+// ---------------------------------------------------------------- theme
+(function () {
+  const saved = localStorage.getItem('gbbolt.theme');
+  if (saved) document.documentElement.dataset.theme = saved;
+  $('#theme').onclick = () => {
+    const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const cur = document.documentElement.dataset.theme || (dark ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem('gbbolt.theme', next);
+    if (current.view === 'coverage') renderCoverage();
+    if (current.view === 'ram') renderRam(current.arg);
+  };
+})();
+
+// ---------------------------------------------------------------- highlighting
+function ident(w, lang, first) {
+  const base = w.startsWith('.') ? w : w.split('.')[0];
+  if (lang === 'py' && PYKW.has(w)) return `<span class="k-kw">${w}</span>`;
+  if (lang === 'c' && /^(if|else|for|while|return|break|continue|void|u8|u16|bool|true|false|NULL|goto)$/.test(w)) return `<span class="k-kw">${w}</span>`;
+  if (lang === 'asm' && first) return `<span class="k-mn">${w}</span>`;
+  if (U.has(w)) return `<a class="k-fn" href="#/code/${encodeURIComponent(w)}" title="${esc(hex4(U.get(w).s))}">${w}</a>`;
+  if (V.has(base)) { const v = V.get(base); return `<a class="k-var" href="#/ram/${encodeURIComponent(base)}" title="${esc(hex4(v.addr) + ' ' + v.type + (v.desc ? ' — ' + v.desc : ''))}">${esc(w)}</a>`; }
+  if (D.consts[w]) return `<span class="k-const" title="${esc(hex4(D.consts[w].value) + (D.consts[w].doc ? ' — ' + D.consts[w].doc : ''))}">${w}</span>`;
+  if (lang !== 'asm' && D.helpers[w] !== undefined && !['True', 'False', 'None'].includes(w)) return `<span class="k-help" title="${esc(D.helpers[w])}">${w}</span>`;
+  if (lang === 'asm' && ASMREG.has(w.toLowerCase())) return `<span class="k-reg">${w}</span>`;
+  return esc(w);
+}
+function hl(text, lang) {
+  const re = lang === 'asm'
+    ? /(;.*$)|("(?:[^"\\]|\\.)*")|(\$[0-9A-Fa-f]+|%[01]+|\b\d+\b)|([A-Za-z_.][\w.]*[+-]?)|(\s+)|([\s\S])/g
+    : lang === 'doc'
+    ? /((?!))|((?!))|(0x[0-9A-Fa-f]+|\$[0-9A-Fa-f]+|\b\d+\b)|([A-Za-z_][\w]*)|(\s+)|([\s\S])/g
+    : /((?:#|\/\/).*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(0x[0-9A-Fa-f]+|\$[0-9A-Fa-f]+|\b\d+\b)|([A-Za-z_][\w]*)|(\s+)|([\s\S])/g;
+  let out = '', m, first = true;
+  while ((m = re.exec(text))) {
+    if (m[1]) out += `<span class="k-com">${esc(m[1])}</span>`;
+    else if (m[2]) out += `<span class="k-str">${esc(m[2])}</span>`;
+    else if (m[3]) out += `<span class="k-num">${esc(m[3])}</span>`;
+    else if (m[4]) {
+      let w = m[4], tail = '';
+      if (lang === 'asm' && /[+-]$/.test(w) && w.length > 1) { tail = w.slice(-1); w = w.slice(0, -1); }
+      out += ident(w, lang, first) + esc(tail); first = false;
+    }
+    else out += esc(m[0]);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- python -> C-style rendering
+const regType = r => REG16.has(r) ? 'u16' : (r === 'carry' || r === 'zero') ? 'bool' : 'u8';
+function cSignature(u) {
+  const ps = (u.params || []).map(([n, r]) => `${r ? regType(r) : 'int'} ${n} /*${r}*/`).join(', ') || 'void';
+  const rs = u.returns || [];
+  const rt = !rs.length ? 'void' : rs.length === 1 ? `${regType(rs[0])} /*${rs[0]}*/` : `struct { ${rs.map(r => regType(r) + ' ' + r + ';').join(' ')} }`;
+  return `${rt} ${u.n}(${ps})`;
+}
+function splitTop(s, ch) {
+  const out = []; let depth = 0, cur = '';
+  for (const c of s) {
+    if ('([{'.includes(c)) depth++; else if (')]}'.includes(c)) depth--;
+    if (c === ch && depth === 0) { out.push(cur); cur = ''; } else cur += c;
+  }
+  out.push(cur); return out;
+}
+function topColon(s) {
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if ('([{'.includes(c)) depth++; else if (')]}'.includes(c)) depth--;
+    else if (c === ':' && depth === 0 && s[i + 1] !== '=') return i;
+  }
+  return -1;
+}
+function cexpr(e) {
+  e = e.trim();
+  const tern = e.match(/^(.+?) if (.+?) else (.+)$/);
+  if (tern) e = `${tern[2]} ? ${tern[1]} : ${tern[3]}`;
+  return e.replace(/\band\b/g, '&&').replace(/\bor\b/g, '||').replace(/\bnot\s+/g, '!')
+    .replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'NULL')
+    .replace(/\/\//g, '/').replace(/:=/g, '=');
+}
+function cStmt(s) {
+  if (s === 'pass') return ';';
+  if (s === 'break' || s === 'continue') return s + ';';
+  const asg = s.match(/^([^=]+?)\s*(\+=|-=|\|=|&=|\^=|<<=|>>=|=(?!=))\s*(.+)$/);
+  if (asg && !/^(if|while|return)\b/.test(s)) return `${asg[1]} ${asg[2]} ${cexpr(asg[3])};`;
+  if (s.startsWith('return')) return s === 'return' ? 'return;' : `return ${cexpr(s.slice(7))};`;
+  return cexpr(s) + ';';
+}
+function cHead(s) {
+  let m;
+  if ((m = s.match(/^(if|while) (.*)$/))) return `${m[1]} (${cexpr(m[2])})`;
+  if ((m = s.match(/^elif (.*)$/))) return `else if (${cexpr(m[1])})`;
+  if (s === 'else') return 'else';
+  if (s === 'for _ in forever()') return 'for (;;)';
+  if ((m = s.match(/^for (\w+) in range\((.*)\)$/))) {
+    const a = splitTop(m[2], ',').map(x => cexpr(x));
+    const v = m[1];
+    if (a.length === 1) return `for (${v} = 0; ${v} < ${a[0]}; ${v}++)`;
+    if (a.length === 2) return `for (${v} = ${a[0]}; ${v} < ${a[1]}; ${v}++)`;
+    return `for (${v} = ${a[0]}; ${v} ${a[2].trim().startsWith('-') ? '>' : '<'} ${a[1]}; ${v} += ${a[2]})`;
+  }
+  if ((m = s.match(/^for (.+) in (.+)$/))) return `for (${m[1]} : ${cexpr(m[2])})`;
+  return s;
+}
+function splitComment(s) {
+  let q = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) { if (c === q) q = null; continue; }
+    if (c === '"' || c === "'") q = c;
+    else if (c === '#') return [s.slice(0, i).replace(/\s+$/, ''), s.slice(i + 1).trim(), s.slice(0, i).length];
+  }
+  return [s.replace(/\s+$/, ''), null, s.length];
+}
+function toC(u, lines) {
+  // lines: [{t, g}] with python indentation (function body at 0)
+  const out = [{t: cSignature(u) + ' {', g: 0}];
+  const stack = [];    // python indent of each open block's header
+  const pad = n => '    '.repeat(n + 1);
+  // a statement continued over several lines (open brackets) is joined onto its first line
+  const depth = s => [...s].reduce((d, c) => d + ('([{'.includes(c)) - (')]}'.includes(c)), 0);
+  const joined = [];
+  for (let i = 0; i < lines.length; i++) {
+    let {t, g} = lines[i], d = depth(splitComment(t)[0]);
+    while (d > 0 && i + 1 < lines.length) { const nx = lines[++i].t.trim(); t += ' ' + nx; d += depth(splitComment(nx)[0]); }
+    joined.push({t: t.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')'), g});
+  }
+  lines = joined;
+  for (const {t, g} of lines) {
+    if (!t.trim()) { out.push({t: '', g}); continue; }
+    const ind = t.match(/^ */)[0].length;
+    const [code, com] = splitComment(t.trim());
+    const comTxt = com !== null ? (code ? '  ' : '') + '// ' + com : '';
+    if (!code) { // comment-only line keeps its indentation
+      out.push({t: pad(stack.filter(i => i < ind).length) + comTxt.trim(), g}); continue;
+    }
+    const isElse = /^(else|elif)\b/.test(code);
+    let merged = false;
+    while (stack.length && ind <= stack[stack.length - 1]) {
+      const top = stack.pop();
+      if (isElse && top === ind) { merged = true; break; }
+      out.push({t: pad(stack.length) + '}', g: -1});
+    }
+    const c = topColon(code);
+    const lvl = stack.length;
+    if (c >= 0 && c === code.length - 1) {          // block header
+      const head = cHead(code.slice(0, -1).trim());
+      out.push({t: pad(lvl) + (merged ? '} ' : '') + head + ' {' + comTxt, g});
+      stack.push(ind);
+    } else if (c >= 0 && /^(if|elif|else|while|for)\b/.test(code)) {   // one-line block
+      const head = cHead(code.slice(0, c).trim());
+      const body = splitTop(code.slice(c + 1).trim(), ';').map(x => cStmt(x.trim())).join(' ');
+      out.push({t: pad(lvl) + (merged ? '} ' : '') + head + ' ' + (body.includes(';') && body.split(';').length > 2 ? '{ ' + body + ' }' : body) + comTxt, g});
+      if (merged) out.push({t: pad(lvl) + '}', g: -1});
+    } else {
+      const stmts = splitTop(code, ';').map(x => cStmt(x.trim())).join(' ');
+      out.push({t: pad(lvl) + stmts + comTxt, g});
+    }
+  }
+  while (stack.length) { stack.pop(); out.push({t: pad(stack.length) + '}', g: -1}); }
+  out.push({t: '}', g: -1});
+  return out;
+}
+function pseudoLines(u) {
+  // [{t, g}] for the function body (g = group number, 1-based)
+  const lines = [];
+  (u.groups || []).forEach((grp, i) => grp.forEach(t => lines.push({t, g: i + 1})));
+  return lines;
+}
+function renderPseudo(u, mode, withDoc) {
+  const body = pseudoLines(u);
+  let lines;
+  if (mode === 'c') {
+    lines = toC(u, body);
+    if (withDoc && u.doc && u.doc.length) lines = [{t: '/* ' + u.doc.join('\n * ') + ' */', g: 0, raw: true}, ...lines];
+  } else {
+    lines = [{t: u.def + ':', g: 0}];
+    if (withDoc && u.doc && u.doc.length) {
+      lines.push({t: '    """' + u.doc[0] + (u.doc.length === 1 ? '"""' : ''), g: 0, doc: true});
+      u.doc.slice(1).forEach((d, i) => lines.push({t: '    ' + d + (i === u.doc.length - 2 ? '"""' : ''), g: 0, doc: true}));
+    }
+    body.forEach(l => lines.push({t: '    ' + l.t, g: l.g}));
+  }
+  return lines;
+}
+const hue = g => (g * 67 + 200) % 360;
+
+// ---------------------------------------------------------------- router
+let current = {view: null, arg: null};
+function route() {
+  const parts = location.hash.replace(/^#\/?/, '').split('/');
+  const view = parts[0] || 'code';
+  const arg = parts[1] ? decodeURIComponent(parts.slice(1).join('/')) : null;
+  current = {view, arg};
+  $$('#nav a').forEach(a => a.classList.toggle('on', a.dataset.v === view));
+  $$('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + view));
+  if (view === 'code') {
+    const [name, at] = (arg || '').split('@');       // Unit@ADDR: highlight the line at that address
+    current.arg = name || null;
+    renderCode(name || null);
+    if (at) showLineAt(parseInt(at, 16));
+  }
+  else if (view === 'book') renderBook(arg);
+  else if (view === 'coverage') renderCoverage();
+  else if (view === 'graph') renderGraph(arg);
+  else if (view === 'ram') renderRam(arg);
+  else if (view === 'assets') renderAssets(arg);
+  else if (view === 'music') renderMusic(arg);
+  if (view !== 'music' && typeof musicStop === 'function' && music.playing) musicStop();
+}
+window.addEventListener('hashchange', route);
+$('#search').addEventListener('change', e => {
+  const n = e.target.value.trim();
+  if (U.has(n)) location.hash = '#/code/' + encodeURIComponent(n);
+  else if (V.has(n)) location.hash = '#/ram/' + encodeURIComponent(n);
+  e.target.value = '';
+});
+
+// ---------------------------------------------------------------- code view
+let fnFilter = 'all';
+let cardOpen = false;   // details section state, kept while navigating
+function renderFnList(sel) {
+  const q = $('#fnfilter').value.toLowerCase();
+  const list = D.units.filter(u => {
+    if (q && !u.n.toLowerCase().includes(q) && !hex4(u.s).toLowerCase().includes(q)) return false;
+    if (fnFilter === 'code') return u.k === 'code';
+    if (fnFilter === 'todo') return u.k === 'code' && !u.def;
+    if (fnFilter === 'data') return u.k === 'data';
+    return true;
+  });
+  const item = (u, d) =>
+    `<a href="#/code/${encodeURIComponent(u.n)}" class="st-${statusOf(u)} ${u.k}${u.n === sel ? ' on' : ''}" style="--d:${d}" title="${esc(STATUS_TEXT[u.st || 'none'] || '')}">` +
+    `<span class="dot"></span><span class="ad">${hex4(u.s).slice(1)}</span><span class="nm">${esc(u.n)}</span></a>`;
+  if (sideMode === 'list') $('#fnlist').innerHTML = list.map(u => item(u, 0)).join('');
+  else {
+    // folders: open if remembered, if they hold the current unit, or while filtering
+    const here = sel && U.has(sel) ? U.get(sel).p : null;
+    const byFolder = new Map();
+    list.forEach(u => { if (!byFolder.has(u.p)) byFolder.set(u.p, []); byFolder.get(u.p).push(u); });
+    const count = f => list.filter(u => inFolder(u.p, f)).length;
+    const folder = (f, d) => {
+      const n = count(f);
+      if (!n) return '';
+      const open = q || openFolders.has(f) || (here !== null && inFolder(here, f));
+      return `<details data-f="${esc(f)}"${open ? ' open' : ''}><summary style="--d:${d}">${esc(f.split('/').pop())}<span class="cnt">${n}</span></summary>` +
+        childFolders(f).map(c => folder(c, d + 1)).join('') + (byFolder.get(f) || []).map(u => item(u, d)).join('') + '</details>';
+    };
+    $('#fnlist').innerHTML = (byFolder.get('') || []).map(u => item(u, 0)).join('') + childFolders('').map(f => folder(f, 0)).join('');
+  }
+  const on = $('#fnlist a.on');
+  if (on) on.scrollIntoView({block: 'nearest'});
+}
+$('#fnfilter').addEventListener('input', () => renderFnList(current.arg));
+let sideMode = localStorage.getItem('gbbolt.side') || 'tree';
+const openFolders = new Set((() => { try { return JSON.parse(localStorage.getItem('gbbolt.open') || '[]'); } catch (e) { return []; } })());
+$$('#sidemode button').forEach(b => {
+  b.classList.toggle('on', b.dataset.m === sideMode);
+  b.onclick = () => { sideMode = b.dataset.m; localStorage.setItem('gbbolt.side', sideMode); $$('#sidemode button').forEach(x => x.classList.toggle('on', x === b)); renderFnList(current.arg); };
+});
+$('#fnlist').addEventListener('toggle', e => {      // remember which folders are open
+  const f = e.target.dataset && e.target.dataset.f;
+  if (f === undefined || $('#fnfilter').value) return;
+  if (e.target.open) openFolders.add(f); else openFolders.delete(f);
+  localStorage.setItem('gbbolt.open', JSON.stringify([...openFolders]));
+}, true);
+if (!CODE_UNITS.some(u => !u.def)) $('#fnchips [data-f="todo"]').remove();   // nothing left to do
+$$('#fnchips button').forEach(b => b.onclick = () => {
+  fnFilter = b.dataset.f; $$('#fnchips button').forEach(x => x.classList.toggle('on', x === b)); renderFnList(current.arg);
+});
+$$('#pmode button').forEach(b => {
+  b.classList.toggle('on', b.dataset.m === pmode);
+  b.onclick = () => { pmode = b.dataset.m; localStorage.setItem('gbbolt.pmode', pmode); $$('#pmode button').forEach(x => x.classList.toggle('on', x === b)); renderCode(current.arg); };
+});
+$('#bytesbtn').onclick = e => { e.target.classList.toggle('on'); $('#asrc').classList.toggle('hidebytes'); };
+
+function linkList(items) {
+  return items.length ? items.map(([n, k]) => `<a href="#/code/${encodeURIComponent(n)}" class="chip" title="${k}">${esc(n)}${k !== 'call' ? ` <span style="color:var(--muted)">${k}</span>` : ''}</a>`).join(' ') : '<span style="color:var(--muted)">—</span>';
+}
+function varChips(names) {
+  return names.length ? names.map(n => `<span class="chip">${hl(n, 'py')}</span>`).join(' ') : '<span style="color:var(--muted)">—</span>';
+}
+function verifyBox(u) {
+  const r = u.res; if (!r) return '';
+  const st = u.st;
+  let ttl = {verified: `Verified against the original code — ${r.passed}/${r.trials} random machine states gave identical memory and return values`,
+    checked: `Checked (header, names) — not run: ${esc(r.skip || '')}`,
+    failing: 'Failing — the annotation does not match the code',
+    stale: 'Stale — the code changed since this annotation was signed'}[st] || st;
+  let items = [];
+  r.errors.forEach(e => items.push(`<li class="err">${esc(e)}</li>`));
+  r.warnings.forEach(e => items.push(`<li class="warn">${esc(e)}</li>`));
+  r.info.forEach(e => items.push(`<li class="info">${esc(e)}</li>`));
+  items.push(`<li class="info">sig ${r.sig}: ${r.sig_state === 'ok' ? 'matches the signed bytes' : r.sig_state === 'unsigned' ? 'not signed yet (run <span class="kbd">gbbolt.py stamp</span>)' : 'STALE — bytes changed since signing'}</li>`);
+  let ex = '';
+  if (r.example) {
+    const e = r.example;
+    const inputs = Object.entries(e.args).concat(Object.entries(e.state || {})).map(([k, v]) => `${k}=${v}`).join(', ') || '(random memory only)';
+    ex = `<div style="margin-top:6px">Counter-example (trial ${e.trial}) with ${esc(inputs)}:</div><table><tr><th>where</th><th>original</th><th>pseudo-code</th></tr>` +
+      e.memory.map(m => `<tr><td>${m.addr}</td><td>${m.asm}</td><td>${m.pseudo}</td></tr>`).join('') +
+      e.returns.map(m => `<tr><td>return ${m.reg}</td><td>${m.asm}</td><td>${m.pseudo}</td></tr>`).join('') + '</table>';
+  }
+  return `<div class="vbox st-${st}"><div class="ttl"><span class="dot"></span>${ttl}</div><ul>${items.join('')}</ul>${ex}</div>`;
+}
+function headerTemplate(u) {
+  const r = u.refs || {reads: [], writes: [], ptrs: []};
+  const t = [`;@ def ${u.n}()`, `;@ What does it do? (free text)`];
+  if (r.reads.length) t.push(`;@ reads: ${r.reads.join(', ')}`);
+  if (r.writes.length) t.push(`;@ writes: ${r.writes.join(', ')}`);
+  t.push(`${u.n}::`, `;> # pseudo-code for the instructions below`);
+  return t.join('\n');
+}
+function showLineAt(addr) {
+  // the line holding that byte: the last instruction / data line starting at or before it
+  let ln = null;
+  for (const l of $$('#asrc .ln')) {
+    const a = $('.ad', l);
+    if (!a || !a.textContent || l.classList.contains('lbl')) continue;
+    if (parseInt(a.textContent, 16) <= addr) ln = l; else break;
+  }
+  if (!ln) return;
+  $$('#asrc .ln.target').forEach(e => e.classList.remove('target'));
+  ln.classList.add('target');
+  const box = $('#asrc');
+  box.scrollTop += ln.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientHeight / 3;
+}
+// one pseudo-code line: the code keeps its width, the comment wraps (see .cm)
+function codeAndComment(t, lang) {
+  const cut = lang === 'c' ? t.indexOf('//') : (i => i < t.length ? i : -1)(splitComment(t)[2]);
+  const code = cut < 0 ? t : t.slice(0, cut), com = cut < 0 ? '' : t.slice(cut);
+  return `<span class="tx">${hl(code, lang) || ' '}</span>` + (com ? `<span class="cm k-com">${esc(com)}</span>` : '');
+}
+function renderCode(name) {
+  if (!name || !U.has(name)) name = ENTRY;
+  const u = U.get(name);
+  renderFnList(name);
+  const size = u.e - u.s;
+  const st = statusOf(u);
+  const crumb = u.p ? `<div class="crumb">${u.p.split('/').map((s, i, a) => { const f = a.slice(0, i + 1).join('/'); return `<a href="#/book/${encodeURIComponent(f)}" title="${esc(FOLDER_DESC.get(f) || '')}">${esc(s)}</a>`; }).join(' / ')} /</div>` : '';
+  let card = crumb + `<h1><span class="dot st-${st}"></span>${esc(u.n)} <span class="badge st-${u.st || 'none'}">${u.k === 'data' ? (u.asset ? 'asset · ' + esc(u.asset) : u.table ? 'jump table' : 'data') : STATUS_TEXT[u.st || 'none']}</span></h1>`;
+  card += `<div class="meta">${hex4(u.s)}–${hex4(u.e - 1)} · ${size} byte${size === 1 ? '' : 's'}</div>`;
+  if (u.def) {
+    const ps = (u.params || []).map(([n, r]) => `<span class="chip">${esc(n)} ← <b>${r}</b></span>`).join('');
+    const rs = (u.returns || []).length ? `<span class="chip">returns <b>${u.returns.join(', ')}</b></span>` : '';
+    card += `<div class="sig">${ps || '<span class="chip">no inputs</span>'} ${rs}</div>`;
+    if (u.doc.length) card += `<div class="doc">${u.doc.map(d => hl(d, 'doc')).join(' ')}</div>`;
+  }
+  // everything from "reads" on lives in a collapsible section (collapsed by default)
+  let details = '';
+  if (u.def) {
+    details += `<div class="rows"><div>reads</div><div>${varChips(u.hdr.reads)}</div><div>writes</div><div>${varChips(u.hdr.writes)}</div>` +
+      `<div>clobbers</div><div>${u.hdr.clobbers.length ? u.hdr.clobbers.map(c => `<span class="chip"><b>${c}</b></span>`).join(' ') : '<span style="color:var(--muted)">—</span>'}</div>` +
+      `<div>called by</div><div>${linkList(u.in)}</div><div>calls</div><div>${linkList(u.out)}</div></div>`;
+    details += verifyBox(u);
+  } else {
+    if (u.refs) details += `<div class="rows"><div>reads</div><div>${varChips(u.refs.reads)}</div><div>writes</div><div>${varChips(u.refs.writes)}</div><div>pointers</div><div>${varChips(u.refs.ptrs)}</div></div>`;
+    details += `<div class="rows"><div>called by</div><div>${linkList(u.in || [])}</div><div>calls</div><div>${linkList(u.out || [])}</div></div>`;
+  }
+  const r = u.res;
+  const summary = [
+    r ? (r.trials ? `${STATUS_TEXT[u.st]} ${r.passed}/${r.trials}` : STATUS_TEXT[u.st]) : null,
+    r && r.errors.length ? `${r.errors.length} error${r.errors.length > 1 ? 's' : ''}` : null,
+    r && r.warnings.length ? `${r.warnings.length} warning${r.warnings.length > 1 ? 's' : ''}` : null,
+    `${new Set((u.in || []).map(x => x[0])).size} caller(s)`,
+    `${new Set((u.out || []).map(x => x[0])).size} callee(s)`,
+  ].filter(Boolean).join(' · ');
+  card += `<details id="carddetails"${cardOpen ? ' open' : ''}><summary>Details <span>${esc(summary)}</span></summary>${details}</details>`;
+  $('#card').innerHTML = card;
+  $('#carddetails').addEventListener('toggle', e => { cardOpen = e.target.open; });
+
+  // pseudo pane
+  if (u.def) {
+    const lines = renderPseudo(u, pmode, false);
+    $('#psrc').innerHTML = '<div class="lines">' + lines.map((l, i) => {
+      const g = l.g > 0 ? ` data-g="${l.g}" style="--h:${hue(l.g)}"` : '';
+      return `<div class="ln"${g}><span class="no">${i + 1}</span>${codeAndComment(l.t, pmode === 'c' ? 'c' : 'py')}</div>`;
+    }).join('') + '</div>';
+  } else if (u.k === 'data') {
+    if (u.asset) {
+      $('#psrc').innerHTML = `<div class="placeholder"><b>Asset</b> (${esc(u.asset)}) — <a href="#/assets/${encodeURIComponent(u.n)}">open in Assets →</a><br><div class="astage" id="codeasset" style="margin-top:10px"></div></div>`;
+      const a = ASSETS.get(u.n);
+      if (a) drawAsset(a, $('#codeasset'), 'large');
+    } else
+    $('#psrc').innerHTML = `<div class="placeholder">${u.table ? `<b>Jump table</b> with ${u.table.length} entries${G.jumpRst !== null && G.jumpRst !== undefined ? ` (used with <span class="kbd">rst $${G.jumpRst.toString(16).toUpperCase().padStart(2, '0')}</span>)` : ''}:<pre>${u.table.map((t, i) => `${String(i).padStart(2)}: ${hl(t, 'py')}`).join('\n')}</pre>` : 'Data block — no pseudo-code.'}</div>`;
+  } else {
+    $('#psrc').innerHTML = `<div class="placeholder"><b>No pseudo-code yet.</b><br>Add a header above the label and <span class="kbd">;></span> lines between the instructions in <span class="kbd">src/${esc(u.file || '')}</span>, then run <span class="kbd">python tools/gbbolt.py</span>. A starting point from the static analysis:<pre>${esc(headerTemplate(u))}</pre></div>`;
+  }
+  // asm pane
+  $('#asmrange').textContent = `${hex4(u.s)}–${hex4(u.e - 1)}`;
+  let prevOwner = null;
+  const asmRow = (l, own) => {
+    const [addr, bytes, kind, text, comment, g, owner] = l;
+    // lines that belong to another function's pseudo-code: say whose, link there
+    const tag = owner && owner !== prevOwner ? `<a class="xref" href="#/code/${encodeURIComponent(owner)}">→ ${esc(owner)}</a>` : '';
+    prevOwner = owner || null;
+    const ga = owner ? ' class="ln xr"' : own && g > 0 ? ` data-g="${g}" style="--h:${hue(g)}"` : '';
+    const row = rowHtml(addr, bytes, kind, text, comment);
+    return owner ? row.replace('<div class="ln', `<div title="belongs to ${esc(owner)}" class="ln xr`).replace(/<\/div>$/, tag + '</div>')
+      : row.replace(/^<div class="ln( lbl)?"/, `<div class="ln$1"${ga}`);
+  };
+  const rowHtml = (addr, bytes, kind, text, comment) => {
+    const ad = addr !== null && kind !== 'b' && kind !== 'c' ? hex4(addr).slice(1) : '';
+    const cm = c => c ? `<span class="cm k-com">${esc(c)}</span>` : '';
+    if (kind === 'l') return `<div class="ln lbl"><span class="ad">${ad}</span><span class="by"></span><span class="tx">${esc(text)}:</span></div>`;
+    let body;
+    if (kind === 'c') body = `<span class="tx"></span>${cm(comment)}`;
+    else if (kind === 'b') body = '<span class="tx"> </span>';
+    else body = `<span class="tx">    ${hl(text, 'asm')}${comment ? ' ' : ''}</span>${cm(comment)}`;
+    return `<div class="ln"><span class="ad">${ad}</span><span class="by">${bytes}</span>${body}</div>`;
+  };
+  const elsewhere = (u.foreign || []).map(f => `<div class="ln sep"><span class="tx">elsewhere, inside <a href="#/code/${encodeURIComponent(f.host)}">${esc(f.host)}</a>:</span></div>` +
+    f.lines.map(l => asmRow(l, true)).join('')).join('');
+  $('#asrc').innerHTML = '<div class="lines">' + u.lines.map(l => asmRow(l, !!u.def)).join('') + elsewhere + '</div>';
+  $('#psrc').scrollTop = 0; $('#asrc').scrollTop = 0;
+  linker.reset();
+  $('#focusname').textContent = u.n;
+  fitComments($('#psrc')); fitComments($('#asrc'));
+}
+// comments wrap at the visible edge of their pane, even when some code line is wider
+function fitComments(pane) {
+  const cms = $$('.cm', pane);
+  if (!cms.length) return;
+  const edge = pane.clientWidth - 14;
+  const x0 = pane.getBoundingClientRect().left - pane.scrollLeft;
+  const lefts = cms.map(c => c.getBoundingClientRect().left - x0);   // one layout pass for all
+  cms.forEach((c, i) => {
+    const room = edge - lefts[i];
+    // too little room left of the edge (the code itself is that wide): don't wrap at all
+    const wrap = room >= 110;
+    c.style.maxWidth = wrap ? room + 'px' : 'none';
+    c.style.whiteSpace = wrap ? '' : 'pre';
+    c.style.contain = wrap ? '' : 'none';
+  });
+}
+new ResizeObserver(es => es.forEach(e => fitComments(e.target))).observe($('#psrc'));
+new ResizeObserver(es => es.forEach(e => fitComments(e.target))).observe($('#asrc'));
+// group linking between the panes: hover shows a group; clicking a line pins it
+// (hovering then changes nothing) until you click it again, click another line,
+// or click anywhere outside the code. Selecting text does not pin.
+const linker = (function () {
+  let hot = null, pinned = null;
+  function setHot(g, from) {
+    if (g === hot) return;
+    $$('.ln.hot').forEach(e => e.classList.remove('hot'));
+    hot = g;
+    if (!g) return;
+    $$(`#psrc .ln[data-g="${g}"], #asrc .ln[data-g="${g}"]`).forEach(e => e.classList.add('hot'));
+    // the other pane always scrolls its first line of the group to the top
+    const other = from === 'p' ? $('#asrc') : $('#psrc');
+    const first = $(`.ln[data-g="${g}"]`, other);
+    if (first) other.scrollTop += first.getBoundingClientRect().top - other.getBoundingClientRect().top;
+  }
+  function pin(g, from) {
+    $$('.ln.pin').forEach(e => e.classList.remove('pin', 'pin-top', 'pin-bot'));
+    pinned = g;
+    if (!g) { setHot(null); return; }
+    setHot(g, from);
+    const rows = $$(`#psrc .ln[data-g="${g}"], #asrc .ln[data-g="${g}"]`);
+    rows.forEach(e => e.classList.add('pin'));
+    const inRun = e => e && e.classList.contains('pin');
+    rows.forEach(e => {
+      if (!inRun(e.previousElementSibling)) e.classList.add('pin-top');
+      if (!inRun(e.nextElementSibling)) e.classList.add('pin-bot');
+    });
+  }
+  for (const [id, tag] of [['#psrc', 'p'], ['#asrc', 'a']]) {
+    $(id).addEventListener('mouseover', e => { if (pinned) return; const ln = e.target.closest('.ln'); setHot(ln && ln.dataset.g || null, tag); });
+    $(id).addEventListener('mouseleave', () => { if (!pinned) setHot(null); });
+    $(id).addEventListener('click', e => {
+      if (e.target.closest('a') || !getSelection().isCollapsed) return;   // links and text selection
+      const ln = e.target.closest('.ln[data-g]');
+      if (!ln) { pin(null); return; }
+      pin(ln.dataset.g === pinned ? null : ln.dataset.g, tag);
+    });
+  }
+  document.addEventListener('click', e => { if (pinned && !e.target.closest('#psrc, #asrc')) pin(null); });
+  return {reset: () => { pinned = null; hot = null; }};
+})();
+// colours on/off (off: only the hovered or pinned group is tinted)
+(function () {
+  const btn = $('#colorbtn');
+  const apply = on => { btn.classList.toggle('on', on); $('#panes').classList.toggle('nocolor', !on); };
+  let on = localStorage.getItem('gbbolt.colors') !== 'off';
+  apply(on);
+  btn.onclick = () => { on = !on; localStorage.setItem('gbbolt.colors', on ? 'on' : 'off'); apply(on); };
+})();
+
+// focus mode: only the two panes; ☰ opens the function tree/list as a drawer
+(function () {
+  const set = on => {
+    document.body.classList.toggle('focus', on);
+    document.body.classList.remove('drawer');
+    $('#focusbtn').classList.toggle('on', on);
+    try { localStorage.setItem('gbbolt.focus', on ? '1' : ''); } catch (e) {}
+  };
+  $('#focusbtn').onclick = () => set(!document.body.classList.contains('focus'));
+  $('#drawerbtn').onclick = e => { e.stopPropagation(); document.body.classList.toggle('drawer'); const on = $('#fnlist a.on'); if (on) on.scrollIntoView({block: 'center'}); };
+  document.addEventListener('click', e => {        // a click outside the drawer, or picking a function, closes it
+    if (!document.body.classList.contains('drawer')) return;
+    if (!e.target.closest('#sidebar') || e.target.closest('#fnlist a')) document.body.classList.remove('drawer');
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || e.target.matches('input')) return;
+    if (document.body.classList.contains('drawer')) document.body.classList.remove('drawer');
+    else if (document.body.classList.contains('focus')) set(false);
+  });
+  window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#/code')) set(false); });
+  try { if (localStorage.getItem('gbbolt.focus') && (location.hash || '#/code').startsWith('#/code')) set(true); } catch (e) {}
+})();
+
+// draggable divider between the panes (fraction kept in localStorage)
+(function () {
+  const panes = $('#panes'), bar = $('#splitter');
+  const set = f => { panes.style.setProperty('--lw', f + 'fr'); panes.style.setProperty('--rw', (1 - f) + 'fr'); return f; };
+  let frac = set(Math.min(.85, Math.max(.15, parseFloat(localStorage.getItem('gbbolt.split')) || .5)));
+  bar.addEventListener('pointerdown', e => {
+    bar.setPointerCapture(e.pointerId); bar.classList.add('drag'); document.body.classList.add('resizing');
+    const r = panes.getBoundingClientRect();
+    const move = ev => { frac = set(Math.min(.85, Math.max(.15, (ev.clientX - r.left) / r.width))); };
+    const up = () => {
+      bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up);
+      bar.classList.remove('drag'); document.body.classList.remove('resizing');
+      localStorage.setItem('gbbolt.split', frac.toFixed(3));
+    };
+    bar.addEventListener('pointermove', move); bar.addEventListener('pointerup', up);
+  });
+  bar.addEventListener('dblclick', () => { frac = set(.5); localStorage.setItem('gbbolt.split', '0.5'); });
+})();
+
+// ---------------------------------------------------------------- book view
+let bookMode = pmode;
+function renderBook(arg) {
+  // chapters = folders in reading order (numbered 1, 1.2, ...), functions in ROM order inside
+  const fns = ANN.slice().sort((a, b) => a.s - b.s);
+  const direct = f => fns.filter(u => (u.p || '') === f);
+  const has = f => fns.some(u => inFolder(u.p, f));
+  const numbers = new Map();
+  (function number(f, prefix) {
+    childFolders(f).filter(has).forEach((c, i) => { const n = prefix + (i + 1); numbers.set(c, n); number(c, n + '.'); });
+  })('', '');
+  const order = [];       // depth-first: a folder, its own functions, then its subfolders
+  (function walk(f) { childFolders(f).filter(has).forEach(c => { order.push(c); walk(c); }); })('');
+  const fnSection = u => {
+    const lines = renderPseudo(u, bookMode, true);
+    const code = lines.map(l => l.doc ? `<span class="k-str">${esc(l.t)}</span>` : l.raw ? `<span class="k-com">${esc(l.t)}</span>` : hl(l.t, bookMode === 'c' ? 'c' : 'py')).join('\n');
+    return `<section class="bfn" id="b-${esc(u.n)}"><h2><span class="dot st-${u.st}"></span><a href="#/code/${encodeURIComponent(u.n)}">${esc(u.n)}</a><span class="ad">${hex4(u.s)}</span><span class="badge st-${u.st}">${STATUS_TEXT[u.st]}</span></h2><pre>${code}</pre></section>`;
+  };
+  const chapter = f => {
+    const depth = f.split('/').length, tag = depth === 1 ? 'h2' : depth === 2 ? 'h3' : 'h4';
+    return `<div class="bchap" id="ch-${esc(f)}"><${tag}><span class="no">${numbers.get(f)}</span>${esc(f.split('/').pop())}</${tag}>` +
+      (FOLDER_DESC.get(f) ? `<p>${esc(FOLDER_DESC.get(f))}</p>` : '') + '</div>' + direct(f).map(fnSection).join('');
+  };
+  $('#toc').innerHTML = direct('').map(u => `<a href="#/book/${encodeURIComponent(u.n)}" class="st-${u.st}"><span class="dot"></span>${esc(u.n)}</a>`).join('') +
+    order.map(f => { const d = f.split('/').length - 1;
+      return `<a href="#/book/${encodeURIComponent(f)}" class="chap" style="--d:${d}"><span class="no">${numbers.get(f)}</span>${esc(f.split('/').pop())}</a>` +
+        direct(f).map(u => `<a href="#/book/${encodeURIComponent(u.n)}" class="st-${u.st}" style="--d:${d + 1}"><span class="dot"></span>${esc(u.n)}</a>`).join(''); }).join('');
+  const intro = `<div class="intro"><div class="seg" id="bmode" style="float:right"><button data-m="py" class="${bookMode === 'py' ? 'on' : ''}">Python</button><button data-m="c" class="${bookMode === 'c' ? 'on' : ''}">C-style</button></div>
+    <b style="color:var(--text)">The ${esc(D.title)} pseudo-code book</b> — every annotated function, chapter by chapter (the folders of <span class="kbd">;@ path:</span>), in ROM order inside a chapter. Generated from the <span class="kbd">;@</span>/<span class="kbd">;></span> comments in the disassembly; the assembly stays the source of truth.
+    Names link to their definitions; dotted names are helpers (hover for what they do). Parameters and results are bound to CPU registers (<span class="kbd">src: hl</span>).
+    ${fns.length} functions, ${fns.filter(u => u.st === 'verified').length} verified by differential testing.</div>`;
+  $('#bookbody').innerHTML = intro + direct('').map(fnSection).join('') + order.map(chapter).join('');
+  $$('#bmode button').forEach(b => b.onclick = () => { bookMode = b.dataset.m; renderBook(); });
+  if (arg) { const el = document.getElementById('b-' + arg) || document.getElementById('ch-' + arg); if (el) el.scrollIntoView(); }
+}
+// following a link out of a function first points the URL at that function,
+// so the browser's back button returns to it
+$('#bookbody').addEventListener('click', e => {
+  const a = e.target.closest('a[href^="#/"]'), sec = e.target.closest('.bfn');
+  if (!a || !sec) return;
+  const here = '#/book/' + encodeURIComponent(sec.id.slice(2));
+  if (location.hash !== here) history.replaceState(null, '', here);
+});
+
+// ---------------------------------------------------------------- coverage view
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function renderCoverage() {
+  const map = D.rommap;
+  const cnt = {}; for (const ch of map) cnt[ch] = (cnt[ch] || 0) + 1;
+  const codeBytes = map.length - (cnt.d || 0);
+  const annBytes = (cnt.v || 0) + (cnt.k || 0) + (cnt.f || 0) + (cnt.s || 0);
+  const funcs = CODE_UNITS.length, ann = ANN.length;
+  const by = s => ANN.filter(u => u.st === s).length;
+  const ramNamed = D.vars.filter(v => v.type !== 'io').length, ramUnnamed = D.unnamed.length;
+  const pct = (a, b) => b ? (100 * a / b).toFixed(1) + '%' : '—';
+  const tile = (v, l, bar) => `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div>${bar || ''}</div>`;
+  const bar = parts => `<div class="bar">${parts.map(([w, c]) => `<i style="width:${w}%;background:${c}"></i>`).join('')}</div>`;
+  const nextUp = CODE_UNITS.filter(u => !u.def).map(u => ({u, callers: new Set((u.in || []).map(x => x[0])).size, size: u.e - u.s}))
+    .sort((a, b) => b.callers - a.callers || b.size - a.size).slice(0, 15);
+  $('#coverage').innerHTML = `
+    <div class="tiles">
+      ${tile(pct(annBytes, codeBytes), `of code bytes annotated (${annBytes} / ${codeBytes})`, bar([[100 * (cnt.v || 0) / codeBytes, 'var(--ok)'], [100 * ((cnt.k || 0) + (cnt.s || 0)) / codeBytes, 'var(--chk)'], [100 * (cnt.f || 0) / codeBytes, 'var(--fail)']]))}
+      ${tile(`${ann} / ${funcs}`, 'code units with pseudo-code', bar([[100 * by('verified') / funcs, 'var(--ok)'], [100 * by('checked') / funcs, 'var(--chk)'], [100 * by('failing') / funcs, 'var(--fail)']]))}
+      ${tile(by('verified'), 'verified: pseudo-code ran against the original on random machine states')}
+      ${tile(by('checked'), 'checked: names and header checked, not runnable (hardware, no return…)')}
+      ${tile(by('failing') + by('stale'), 'failing or stale')}
+      ${tile(`${ramNamed}`, `named RAM variables · ${ramUnnamed} referenced addresses still unnamed`, bar([[100 * ramNamed / Math.max(1, ramNamed + ramUnnamed), 'var(--accent)']]))}
+      ${tile(D.build.ok ? '✓' : '✗', 'rebuilt ROM matches the original byte for byte')}
+    </div>
+    <h3>ROM map</h3>
+    <div class="legend"><span><i style="background:var(--ok)"></i>verified</span><span><i style="background:var(--chk)"></i>checked</span><span><i style="background:var(--fail)"></i>failing</span><span><i style="background:var(--stale)"></i>stale</span><span><i style="background:var(--codec)"></i>code, not annotated</span><span><i style="background:var(--datac)"></i>data</span></div>
+    <canvas id="rommap" width="256" height="${Math.ceil(map.length / 256)}"></canvas>
+    <div id="maptip">one pixel per byte, 256 bytes per row — click to open</div>
+    ${nextUp.length ? `<h3>Next up — most-called functions without pseudo-code</h3>
+    <table class="grid"><tr><th>function</th><th>address</th><th>size</th><th>callers</th></tr>
+      ${nextUp.map(x => `<tr><td class="m"><a href="#/code/${encodeURIComponent(x.u.n)}">${esc(x.u.n)}</a></td><td class="m">${hex4(x.u.s)}</td><td class="m">${x.size}</td><td class="m">${x.callers}</td></tr>`).join('')}
+    </table>` : ''}
+    <p style="color:var(--muted);font-size:12.5px">Verification took ${D.verifySeconds}s · generated ${D.generated}</p>`;
+  const cv = $('#rommap'); const ctx = cv.getContext('2d');
+  const col = {v: cssVar('--ok'), k: cssVar('--chk'), f: cssVar('--fail'), s: cssVar('--stale'), c: cssVar('--codec'), d: cssVar('--datac')};
+  const img = ctx.createImageData(256, cv.height);
+  const rgb = {};
+  for (const [k, c] of Object.entries(col)) { ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); rgb[k] = ctx.getImageData(0, 0, 1, 1).data.slice(0, 3); }
+  for (let i = 0; i < map.length; i++) { const c = rgb[map[i]]; img.data.set([c[0], c[1], c[2], 255], i * 4); }
+  ctx.putImageData(img, 0, 0);
+  cv.style.width = Math.min(768, cv.parentElement.clientWidth - 10) + 'px';
+  const unitAt = a => { let lo = 0, hi = D.units.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (D.units[m].s <= a) lo = m; else hi = m - 1; } return D.units[lo]; };
+  const pos = e => { const r = cv.getBoundingClientRect(); const x = Math.floor((e.clientX - r.left) / r.width * 256), y = Math.floor((e.clientY - r.top) / r.height * cv.height); return y * 256 + x; };
+  cv.onmousemove = e => { const a = pos(e); const u = unitAt(a); $('#maptip').textContent = `${hex4(a)} · ${u.n} (${u.k === 'data' ? 'data' : STATUS_TEXT[u.st || 'none']})`; };
+  cv.onclick = e => { location.hash = '#/code/' + encodeURIComponent(unitAt(pos(e)).n); };
+}
+
+// ---------------------------------------------------------------- call graph
+let gmode = 'all', gstate = null;
+$$('#gmode button').forEach(b => b.onclick = () => { gmode = b.dataset.m; $$('#gmode button').forEach(x => x.classList.toggle('on', x === b)); renderGraph(current.arg, true); });
+$('#gdepth').onchange = () => renderGraph(current.arg, true);
+// whole program: limit to one folder (subfolders included)
+$('#gfolder').innerHTML = '<option value="">all</option>' + FOLDERS.filter(f => CODE_UNITS.some(u => inFolder(u.p, f.path)))
+  .map(f => `<option value="${esc(f.path)}">${'  '.repeat(f.path.split('/').length - 1)}${esc(f.path.split('/').pop())}</option>`).join('');
+$('#gfolder').value = localStorage.getItem('gbbolt.gfolder') || '';
+$('#gfolder').onchange = () => { localStorage.setItem('gbbolt.gfolder', $('#gfolder').value); renderGraph(current.arg, true); };
+$('#gfit').onclick = () => gstate && fitGraph();
+function graphEdges() {
+  const es = [];
+  for (const u of CODE_UNITS) for (const [t, k] of (u.out || [])) if (U.has(t) && U.get(t).k === 'code') es.push({a: u.n, b: t, k});
+  return es;
+}
+function layout(nodes, edges) {
+  const out = new Map(nodes.map(n => [n, []])), inc = new Map(nodes.map(n => [n, []]));
+  edges.forEach(e => { out.get(e.a).push(e); inc.get(e.b).push(e); });
+  const state = new Map(), back = new Set();
+  const byAddr = nodes.slice().sort((a, b) => U.get(a).s - U.get(b).s);
+  const roots = byAddr.filter(n => !inc.get(n).length);
+  const visit = n => { state.set(n, 1); for (const e of out.get(n)) { const s = state.get(e.b); if (s === 1) back.add(e); else if (!s) visit(e.b); } state.set(n, 2); };
+  for (const n of [...roots, ...byAddr]) if (!state.get(n)) visit(n);
+  const indeg = new Map(nodes.map(n => [n, 0]));
+  edges.forEach(e => { if (!back.has(e)) indeg.set(e.b, indeg.get(e.b) + 1); });
+  const rank = new Map(nodes.map(n => [n, 0]));
+  const q = byAddr.filter(n => !indeg.get(n));
+  while (q.length) {
+    const n = q.shift();
+    for (const e of out.get(n)) if (!back.has(e)) { rank.set(e.b, Math.max(rank.get(e.b), rank.get(n) + 1)); indeg.set(e.b, indeg.get(e.b) - 1); if (!indeg.get(e.b)) q.push(e.b); }
+  }
+  const R = Math.max(0, ...rank.values());
+  const layers = Array.from({length: R + 1}, () => []);
+  byAddr.forEach(n => layers[rank.get(n)].push(n));
+  const pos = new Map();
+  const setPos = () => layers.forEach(l => l.forEach((n, i) => pos.set(n, i - (l.length - 1) / 2)));
+  setPos();
+  for (let it = 0; it < 6; it++) {
+    const down = it % 2 === 0;
+    const order = down ? layers.slice(1) : layers.slice(0, -1).reverse();
+    for (const l of order) {
+      const bc = new Map(l.map(n => {
+        const nb = (down ? inc.get(n).map(e => e.a) : out.get(n).map(e => e.b)).filter(m => pos.has(m) && m !== n);
+        return [n, nb.length ? nb.reduce((s, m) => s + pos.get(m), 0) / nb.length : pos.get(n)];
+      }));
+      l.sort((a, b) => bc.get(a) - bc.get(b));
+      l.forEach((n, i) => pos.set(n, i - (l.length - 1) / 2));
+    }
+  }
+  const W = n => Math.max(70, n.length * 7.4 + 18);
+  const coords = new Map();
+  const MAXROW = 12;     // wide layers wrap into several rows
+  let y = 0;
+  layers.forEach(l => {
+    for (let k = 0; k < l.length; k += MAXROW) {
+      const row = l.slice(k, k + MAXROW);
+      const total = row.reduce((s, n) => s + W(n) + 18, 0);
+      let x = -total / 2;
+      row.forEach(n => { coords.set(n, {x: x + W(n) / 2, y, w: W(n)}); x += W(n) + 18; });
+      y += 44;
+    }
+    y += 46;
+  });
+  return {coords, back};
+}
+function renderGraph(arg, force) {
+  if (arg && U.has(arg) && !force) gmode = 'nb';
+  $$('#gmode button').forEach(x => x.classList.toggle('on', x.dataset.m === gmode));
+  $('#gdepthl').style.display = gmode === 'nb' ? '' : 'none';      // depth only matters around a function
+  $('#gfolderl').style.display = gmode === 'nb' ? 'none' : '';
+  const focus = arg && U.has(arg) ? arg : (gstate && gstate.focus) || GRAPH_ROOT;
+  if (gstate && !force && gstate.mode === gmode && gstate.focus === focus && gstate.depth === $('#gdepth').value && gstate.folder === $('#gfolder').value) return;
+  let edges = graphEdges();
+  let nodes;
+  if (gmode === 'nb') {
+    const depth = +$('#gdepth').value;
+    const keep = new Set([focus]); let frontier = [focus];
+    for (let d = 0; d < depth; d++) {
+      const next = [];
+      for (const e of edges) {
+        if (frontier.includes(e.a) && !keep.has(e.b)) { keep.add(e.b); next.push(e.b); }
+        if (frontier.includes(e.b) && !keep.has(e.a)) { keep.add(e.a); next.push(e.a); }
+      }
+      frontier = next;
+    }
+    nodes = [...keep]; edges = edges.filter(e => keep.has(e.a) && keep.has(e.b));
+  } else {
+    const f = $('#gfolder').value;
+    if (f) edges = edges.filter(e => inFolder(U.get(e.a).p, f) && inFolder(U.get(e.b).p, f));
+    const used = new Set(); edges.forEach(e => { used.add(e.a); used.add(e.b); });
+    if (f) CODE_UNITS.forEach(u => { if (inFolder(u.p, f)) used.add(u.n); });   // loners in the folder too
+    nodes = [...used];
+  }
+  $('#gfocus').textContent = gmode === 'nb' ? `around ${focus}` : `${nodes.length} functions, ${edges.length} edges`;
+  const {coords} = layout(nodes, edges);
+  const g = $('#gview');
+  let svg = '';
+  for (const e of edges) {
+    const A = coords.get(e.a), B = coords.get(e.b);
+    let d;
+    if (B.y > A.y) d = `M${A.x},${A.y + 13} C${A.x},${A.y + 55} ${B.x},${B.y - 55} ${B.x},${B.y - 13}`;
+    else { const off = 40 + Math.abs(A.y - B.y) * 0.25; d = `M${A.x + A.w / 2},${A.y} C${A.x + A.w / 2 + off},${A.y} ${B.x + B.w / 2 + off},${B.y} ${B.x + B.w / 2},${B.y}`; }
+    svg += `<path class="e ${e.k}" data-a="${esc(e.a)}" data-b="${esc(e.b)}" d="${d}"/>`;
+  }
+  for (const n of nodes) {
+    const c = coords.get(n), u = U.get(n);
+    svg += `<g class="node st-${statusOf(u)}${n === focus && gmode === 'nb' ? ' focus' : ''}" data-n="${esc(n)}" transform="translate(${c.x},${c.y})"><rect x="${-c.w / 2}" y="-13" width="${c.w}" height="26"/><text>${esc(n)}</text></g>`;
+  }
+  g.innerHTML = svg;
+  gstate = {mode: gmode, focus, depth: $('#gdepth').value, folder: $('#gfolder').value, coords, tx: 0, ty: 0, k: 1};
+  fitGraph();
+  $('#ginfo').style.display = 'none';
+}
+function applyView() { $('#gview').setAttribute('transform', `translate(${gstate.tx},${gstate.ty}) scale(${gstate.k})`); }
+function fitGraph() {
+  const box = $('#gview').getBBox(), el = $('#graph');
+  const k = Math.min(el.clientWidth / (box.width + 60), el.clientHeight / (box.height + 60), 1.4);
+  gstate.k = k; gstate.tx = el.clientWidth / 2 - (box.x + box.width / 2) * k; gstate.ty = el.clientHeight / 2 - (box.y + box.height / 2) * k;
+  applyView();
+}
+(function () {
+  const el = $('#graph'); let drag = null;
+  el.addEventListener('wheel', e => {
+    if (!gstate) return; e.preventDefault();
+    const r = el.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    const f = Math.exp(-e.deltaY * 0.0015), k2 = Math.min(4, Math.max(0.05, gstate.k * f));
+    gstate.tx = mx - (mx - gstate.tx) * k2 / gstate.k; gstate.ty = my - (my - gstate.ty) * k2 / gstate.k; gstate.k = k2; applyView();
+  }, {passive: false});
+  el.addEventListener('mousedown', e => { if (e.target.closest('#ginfo')) return; drag = {x: e.clientX, y: e.clientY, tx: gstate.tx, ty: gstate.ty, moved: false}; el.style.cursor = 'grabbing'; });
+  window.addEventListener('mousemove', e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true; gstate.tx = drag.tx + dx; gstate.ty = drag.ty + dy; applyView(); });
+  window.addEventListener('mouseup', e => {
+    if (!drag) return; el.style.cursor = ''; const moved = drag.moved; drag = null;
+    if (moved) return;
+    const node = e.target.closest && e.target.closest('.node');
+    if (node) selectNode(node.dataset.n); else { $('#ginfo').style.display = 'none'; highlightNode(null); }
+  });
+  el.addEventListener('dblclick', e => { const node = e.target.closest('.node'); if (node) location.hash = '#/code/' + encodeURIComponent(node.dataset.n); });
+  el.addEventListener('mouseover', e => { const node = e.target.closest('.node'); if (node) highlightNode(node.dataset.n, true); });
+  el.addEventListener('mouseout', e => { if (e.target.closest('.node')) highlightNode(gstate && gstate.sel || null, true); });
+})();
+function highlightNode(n) {
+  const near = new Set(n ? [n] : []);
+  $$('#gview path.e').forEach(p => {
+    const on = n && (p.dataset.a === n || p.dataset.b === n);
+    if (on) { near.add(p.dataset.a); near.add(p.dataset.b); }
+    p.classList.toggle('hot', !!on); p.classList.toggle('dim', !!n && !on);
+  });
+  $$('#gview .node').forEach(g => g.classList.toggle('dim', !!n && !near.has(g.dataset.n)));
+}
+function selectNode(n) {
+  gstate.sel = n; highlightNode(n);
+  const u = U.get(n);
+  $('#ginfo').style.display = 'block';
+  $('#ginfo').innerHTML = `<div style="font:600 14px var(--mono)"><span class="dot st-${statusOf(u)}"></span> ${esc(n)}</div><div style="color:var(--muted)">${hex4(u.s)} · ${u.e - u.s} bytes · ${STATUS_TEXT[u.st || 'none']}</div>` +
+    (u.doc ? `<p>${u.doc.map(d => esc(d)).join(' ')}</p>` : '') +
+    `<div style="margin-top:6px">called by</div><div>${linkList(u.in || [])}</div><div style="margin-top:6px">calls</div><div>${linkList(u.out || [])}</div>` +
+    `<p><a href="#/code/${encodeURIComponent(n)}">Open code →</a> · <a href="#/graph/${encodeURIComponent(n)}">Centre here</a></p>`;
+}
+
+// ---------------------------------------------------------------- RAM map
+function renderRam(sel) {
+  const ram = D.vars.filter(v => v.type !== 'io');
+  const io = D.vars.filter(v => v.type === 'io');
+  const owner = new Map();
+  ram.forEach((v, i) => { for (let a = v.addr; a < v.addr + Math.max(1, v.size); a++) owner.set(a, {v, h: (i * 47 + 20) % 360}); });
+  const unnamedAt = new Map(D.unnamed.map(x => [x.addr, x]));
+  let hram = '';
+  for (let a = 0xFF80; a <= 0xFFFE; a++) {
+    const o = owner.get(a), un = unnamedAt.get(a);
+    if (o) hram += `<div class="named${sel === o.v.name ? ' sel' : ''}" style="--h:${o.h}" title="${esc(hex4(a) + ' ' + o.v.name)}" data-v="${esc(o.v.name)}">${a.toString(16).slice(2).toUpperCase()}</div>`;
+    else if (un) hram += `<div class="unnamed" title="${esc(hex4(a))} unnamed — used by ${esc([...un.reads, ...un.writes].join(', '))}" data-a="${a}">${a.toString(16).slice(2).toUpperCase()}</div>`;
+    else hram += `<div title="${hex4(a)}">${a.toString(16).slice(2).toUpperCase()}</div>`;
+  }
+  const accessCell = arr => arr.length ? `<span class="links">${arr.map(n => `<a href="#/code/${encodeURIComponent(n)}">${esc(n)}</a>`).join(' ')}</span>` : '<span style="color:var(--muted)">—</span>';
+  const row = v => `<tr id="ram-${esc(v.name)}" class="${v.name === sel ? 'sel' : ''}"><td class="m">${hex4(v.addr)}</td><td class="m"><b>${esc(v.name)}</b></td><td class="m">${esc(v.type)}</td><td>${esc(v.desc)}</td><td>${accessCell(v.reads)}</td><td>${accessCell(v.writes)}</td><td>${accessCell(v.ptrs)}</td></tr>`;
+  $('#ram').innerHTML = `
+    <div class="memwrap">
+      <div><h3 style="margin-top:0">HRAM $FF80–$FFFE</h3><div class="hram" id="hram">${hram}</div>
+        <div class="legend"><span><i style="background:hsla(200,65%,50%,.6)"></i>named</span><span><i style="background:var(--chk)"></i>used but unnamed</span><span><i style="background:var(--panel2);border:1px solid var(--border)"></i>not referenced</span></div></div>
+      <div><h3 style="margin-top:0">WRAM $C000–$DFFF</h3><canvas id="wram" width="128" height="64"></canvas><div id="wtip" style="font:12.5px var(--mono);color:var(--muted);min-height:1.4em">one pixel per byte, 128 bytes per row</div></div>
+    </div>
+    <h3>Named variables (${ram.length})</h3>
+    <table class="grid"><tr><th>address</th><th>name</th><th>type</th><th>description</th><th>read by</th><th>written by</th><th>address taken by</th></tr>${ram.map(row).join('')}</table>
+    <h3>Referenced but unnamed (${D.unnamed.length})</h3>
+    <p style="color:var(--muted);font-size:12.5px;max-width:900px">Addresses the code accesses directly that have no name yet. Name one with <span class="kbd">python tools/rename.py '$ffe5' hSomething u8 "description"</span> — the ROM is rebuilt and checked automatically.</p>
+    <table class="grid"><tr><th>address</th><th>read by</th><th>written by</th><th>address taken by</th></tr>${D.unnamed.map(x => `<tr><td class="m">${hex4(x.addr)}</td><td>${accessCell(x.reads)}</td><td>${accessCell(x.writes)}</td><td>${accessCell(x.ptrs)}</td></tr>`).join('')}</table>
+    <h3>Hardware registers used (${io.length})</h3>
+    <table class="grid"><tr><th>address</th><th>name</th><th>read by</th><th>written by</th></tr>${io.map(v => `<tr id="ram-${esc(v.name)}" class="${v.name === sel ? 'sel' : ''}"><td class="m">${hex4(v.addr)}</td><td class="m">${esc(v.name)}</td><td>${accessCell(v.reads)}</td><td>${accessCell(v.writes)}</td></tr>`).join('')}</table>`;
+  $$('#hram div[data-v]').forEach(d => d.onclick = () => location.hash = '#/ram/' + encodeURIComponent(d.dataset.v));
+  const cv = $('#wram'), ctx = cv.getContext('2d');
+  ctx.fillStyle = cssVar('--panel2'); ctx.fillRect(0, 0, 128, 64);
+  for (let a = 0xC000; a < 0xE000; a++) {
+    const o = owner.get(a), un = unnamedAt.get(a); const i = a - 0xC000;
+    if (o) ctx.fillStyle = `hsla(${o.h},65%,50%,${o.v.name === sel ? 1 : .7})`; else if (un) ctx.fillStyle = cssVar('--chk'); else continue;
+    ctx.fillRect(i % 128, Math.floor(i / 128), 1, 1);
+  }
+  cv.style.width = '512px'; cv.style.height = '256px';
+  const at = e => { const r = cv.getBoundingClientRect(); return 0xC000 + Math.floor((e.clientY - r.top) / r.height * 64) * 128 + Math.floor((e.clientX - r.left) / r.width * 128); };
+  cv.onmousemove = e => { const a = at(e), o = owner.get(a), un = unnamedAt.get(a); $('#wtip').textContent = hex4(a) + (o ? ' · ' + o.v.name : un ? ' · unnamed, used by ' + [...un.reads, ...un.writes].join(', ') : ''); };
+  cv.onclick = e => { const o = owner.get(at(e)); if (o) location.hash = '#/ram/' + encodeURIComponent(o.v.name); };
+  if (sel) { const el = document.getElementById('ram-' + sel); if (el) el.scrollIntoView({block: 'center'}); }
+}
+
+// ---------------------------------------------------------------- assets
+const ASSETS = new Map((D.assets || []).map(a => [a.name, a]));
+const PALETTES = {
+  dmg: ['#e0f8d0', '#88c070', '#346856', '#081820'],
+  grey: ['#ffffff', '#aaaaaa', '#555555', '#000000'],
+};
+let palName = localStorage.getItem('gbbolt.palette') || 'dmg';
+const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const tilesetCache = {};
+const tileset = key => tilesetCache[key] || (tilesetCache[key] = D.tilesets[key] ? b64(D.tilesets[key]) : null);
+const BGP = [0, 1, 2, 3];   // BGP = $E4: colour n -> shade n
+const hexRGB = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+function blitTile(img, W, px, py, data, off, bpp) {
+  const pal = PALETTES[palName].map(hexRGB);
+  for (let y = 0; y < 8; y++) {
+    const lo = data[off + (bpp === 1 ? y : 2 * y)] || 0, hi = bpp === 1 ? lo : (data[off + 2 * y + 1] || 0);
+    for (let x = 0; x < 8; x++) {
+      const c = BGP[((hi >> (7 - x)) & 1) << 1 | ((lo >> (7 - x)) & 1)];
+      const i = ((py + y) * W + px + x) * 4;
+      img.data[i] = pal[c][0]; img.data[i + 1] = pal[c][1]; img.data[i + 2] = pal[c][2]; img.data[i + 3] = 255;
+    }
+  }
+}
+function makeCanvas(w, h, scale) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; c.className = 'px';
+  if (scale) { c.style.width = (w * scale) + 'px'; c.style.height = (h * scale) + 'px'; }
+  return c;
+}
+function tipLine(el, text) {
+  const tip = document.createElement('div');
+  tip.style.cssText = 'font:12.5px var(--mono);color:var(--muted);margin-top:6px';
+  tip.textContent = text; el.appendChild(tip); return tip;
+}
+function drawTiles(a, el, size) {
+  const data = b64(a.bytes), bpp = +(a.params.bpp || 2), per = bpp * 8;
+  const n = Math.floor(data.length / per), cols = +(a.params.width || 16), rows = Math.ceil(n / cols);
+  const c = makeCanvas(cols * 8, rows * 8, size === 'large' ? 4 : 0), ctx = c.getContext('2d');
+  const img = ctx.createImageData(c.width, c.height);
+  for (let t = 0; t < n; t++) blitTile(img, c.width, (t % cols) * 8, Math.floor(t / cols) * 8, data, t * per, bpp);
+  ctx.putImageData(img, 0, 0);
+  el.appendChild(c);
+  if (size === 'large') {
+    const tip = tipLine(el, `${n} tiles, ${bpp} bit${bpp > 1 ? 's' : ''} per pixel · hover a tile`);
+    c.onmousemove = e => {
+      const r = c.getBoundingClientRect();
+      const t = Math.floor((e.clientY - r.top) / r.height * rows) * cols + Math.floor((e.clientX - r.left) / r.width * cols);
+      if (t < n) tip.textContent = `tile ${t} ($${t.toString(16).toUpperCase().padStart(2, '0')}) · ROM ${hex4(a.start + t * per)}`;
+    };
+  }
+}
+function drawTilemap(a, el, size) {
+  const map = b64(a.bytes), W = +(a.params.width || 20), H = +(a.params.height || 18);
+  const ts = tileset(a.tileset) || new Uint8Array(0x1800);
+  const c = makeCanvas(W * 8, H * 8, size === 'large' ? 3 : 0), ctx = c.getContext('2d');
+  const img = ctx.createImageData(c.width, c.height);
+  for (let i = 0; i < W * H; i++) blitTile(img, c.width, (i % W) * 8, Math.floor(i / W) * 8, ts, map[i] * 16, 2);
+  ctx.putImageData(img, 0, 0);
+  el.appendChild(c);
+  if (size === 'large') {
+    const tip = tipLine(el, `${W}×${H} tiles · tile data from running ${a.tileset} in the SM83 emulator`);
+    c.onmousemove = e => {
+      const r = c.getBoundingClientRect();
+      const x = Math.floor((e.clientX - r.left) / r.width * W), y = Math.floor((e.clientY - r.top) / r.height * H), i = y * W + x;
+      tip.textContent = `x ${x}, y ${y} · tile $${map[i].toString(16).toUpperCase().padStart(2, '0')} · ROM ${hex4(a.start + i)}`;
+    };
+  }
+}
+function drawLogo(a, el, size) {
+  // 48 bytes = 48x8 pixels in two halves of 24 bytes; each byte is two 4-pixel rows, high nibble first
+  const data = b64(a.bytes);
+  const c = makeCanvas(48, 8, size === 'large' ? 10 : 4), ctx = c.getContext('2d');
+  const pal = PALETTES[palName];
+  ctx.fillStyle = pal[0]; ctx.fillRect(0, 0, 48, 8); ctx.fillStyle = pal[3];
+  for (let half = 0; half < 2; half++) for (let i = 0; i < 24; i++) {
+    const b = data[half * 24 + i], x0 = (i >> 1) * 4, y0 = half * 4 + (i & 1) * 2;
+    for (let r = 0; r < 2; r++) {
+      const nib = r ? b & 0xF : b >> 4;
+      for (let x = 0; x < 4; x++) if (nib & (8 >> x)) ctx.fillRect(x0 + x, y0 + r, 1, 1);
+    }
+  }
+  el.appendChild(c);
+  if (size === 'large') tipLine(el, '48×8 pixels, 1 bit per pixel, stored as 4×4 blocks');
+}
+const CART_TYPES = {0: 'ROM only', 1: 'MBC1', 2: 'MBC1 + RAM', 3: 'MBC1 + RAM + battery', 5: 'MBC2', 6: 'MBC2 + battery',
+  0x0F: 'MBC3 + timer + battery', 0x11: 'MBC3', 0x13: 'MBC3 + RAM + battery', 0x19: 'MBC5', 0x1B: 'MBC5 + RAM + battery'};
+const RAM_SIZES = {0: 'none', 1: '2 KiB (unofficial)', 2: '8 KiB', 3: '32 KiB', 4: '128 KiB', 5: '64 KiB'};
+const h2 = v => '$' + v.toString(16).toUpperCase().padStart(2, '0');
+function headerInfo(a) {
+  const h = b64(a.bytes), at = off => h[off - 0x100];
+  const title = String.fromCharCode(...h.slice(0x34, 0x44)).replace(/\0+$/, '').replace(/[^\x20-\x7e]/g, '·');
+  let chk = 0;
+  for (let i = 0x134; i <= 0x14C; i++) chk = (chk - at(i) - 1) & 0xFF;
+  const storedGlobal = at(0x14E) << 8 | at(0x14F);
+  const ok = good => good ? '<span class="okv">correct</span>' : '<span class="badv">wrong</span>';
+  const entry = at(0x100) === 0x00 && at(0x101) === 0xC3 ? `nop / jp ${hex4(at(0x103) << 8 | at(0x102))}` : Array.from(h.slice(0, 4), h2).join(' ');
+  return [
+    ['entry point', '$0100', entry],
+    ['logo', '$0104', '48 bytes — see <a href="#/assets/HeaderLogo">HeaderLogo</a>'],
+    ['title', '$0134', `"${esc(title)}"`],
+    ['CGB flag', '$0143', at(0x143) & 0x80 ? 'Game Boy Color' : 'none (original Game Boy)'],
+    ['new licensee', '$0144', esc(String.fromCharCode(at(0x144), at(0x145)).replace(/\0/g, '·'))],
+    ['SGB flag', '$0146', at(0x146) === 3 ? 'uses Super Game Boy functions' : 'none'],
+    ['cartridge type', '$0147', `${h2(at(0x147))} — ${CART_TYPES[at(0x147)] || 'unknown'}`],
+    ['ROM size', '$0148', `${h2(at(0x148))} — ${32 << at(0x148)} KiB (${2 << at(0x148)} banks)`],
+    ['RAM size', '$0149', `${h2(at(0x149))} — ${RAM_SIZES[at(0x149)] || '?'}`],
+    ['destination', '$014A', at(0x14A) ? 'overseas' : 'Japan'],
+    ['old licensee', '$014B', `${h2(at(0x14B))}${at(0x14B) === 1 ? ' — Nintendo' : at(0x14B) === 0x33 ? ' — see new licensee' : ''}`],
+    ['version', '$014C', String(at(0x14C))],
+    ['header checksum', '$014D', `${h2(at(0x14D))} — ${ok(chk === at(0x14D))} (computed ${h2(chk)})`],
+    ['global checksum', '$014E', `${hex4(storedGlobal)} — ${ok(storedGlobal === D.globalChecksum)} (computed ${hex4(D.globalChecksum)})`],
+  ];
+}
+function drawHeader(a, el, size) {
+  const rows = headerInfo(a);
+  if (size !== 'large') {
+    const d = document.createElement('div'); d.className = 'hdrmini';
+    d.innerHTML = rows.filter(r => /^(title|cartridge type|ROM size|header checksum)$/.test(r[0]))
+      .map(r => `<div><span style="color:var(--muted)">${r[0]}</span> ${r[2]}</div>`).join('');
+    el.appendChild(d); return;
+  }
+  const t = document.createElement('table'); t.className = 'kv';
+  t.innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td class="m" style="color:var(--muted)">${r[1]}</td><td class="m">${r[2]}</td></tr>`).join('');
+  el.appendChild(t);
+}
+const OBP = [[0, 1, 2, 3], [0, 1, 0, 3]];   // OBP0 = $E4, OBP1 = $C4 (set at boot)
+let spriteTiles = {};                          // asset name -> chosen tile set
+function spriteCanvas(entries, ts, scale) {
+  if (!entries.length) { const c = makeCanvas(8, 8, scale); return c; }
+  const minX = Math.min(...entries.map(e => e[1])), minY = Math.min(...entries.map(e => e[0]));
+  const W = Math.max(...entries.map(e => e[1])) - minX + 8, H = Math.max(...entries.map(e => e[0])) - minY + 8;
+  const c = makeCanvas(W, H, scale), ctx = c.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  const pal = PALETTES[palName].map(hexRGB);
+  for (const [y, x, tile, attr] of entries) {
+    const obp = OBP[(attr >> 4) & 1];
+    for (let r = 0; r < 8; r++) {
+      const row = attr & 0x40 ? 7 - r : r;
+      const lo = ts[tile * 16 + 2 * row], hi = ts[tile * 16 + 2 * row + 1];
+      for (let b = 0; b < 8; b++) {
+        const bit = attr & 0x20 ? b : 7 - b;
+        const ci = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
+        if (!ci) continue;                       // colour 0 is transparent
+        const px = x - minX + b, py = y - minY + r, i = (py * W + px) * 4;
+        const rgb = pal[obp[ci]];
+        img.data[i] = rgb[0]; img.data[i + 1] = rgb[1]; img.data[i + 2] = rgb[2]; img.data[i + 3] = 255;
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+function drawSprites(a, el, size) {
+  const key = spriteTiles[a.name] || a.tileset;
+  const ts = tileset(key) || new Uint8Array(0x1800);
+  if (size !== 'large') {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center';
+    a.sprites.slice(0, 28).filter((_, i) => i % 4 === 0).forEach(e => wrap.appendChild(spriteCanvas(e, ts, 2)));
+    el.appendChild(wrap); return;
+  }
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;font-size:12.5px;color:var(--muted)';
+  bar.innerHTML = `tiles from <span class="seg">${a.tilesets.map(k => `<button data-k="${esc(k)}" class="${k === key ? 'on' : ''}">${esc(k.replace(/\(.*\)/, '(…)'))}</button>`).join('')}</span><span>sprites use different tile sets - pick the one that makes them look right</span>`;
+  el.appendChild(bar);
+  bar.querySelectorAll('button').forEach(b => b.onclick = () => { spriteTiles[a.name] = b.dataset.k; renderAssets(a.name); });
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;max-width:1100px';
+  a.sprites.forEach((e, id) => {
+    const cell = document.createElement('div');
+    cell.style.cssText = 'background:repeating-conic-gradient(var(--panel) 0 25%, var(--panel2) 0 50%) 0 0/12px 12px;border:1px solid var(--border);border-radius:8px;padding:6px;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:96px;justify-content:space-between';
+    const holder = document.createElement('div');
+    holder.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center';
+    holder.appendChild(spriteCanvas(e, ts, e.length > 16 ? 1 : 2));
+    cell.appendChild(holder);
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font:11px var(--mono);color:var(--muted)';
+    lbl.textContent = `$${id.toString(16).toUpperCase().padStart(2, '0')} · ${e.length} tile${e.length === 1 ? '' : 's'}`;
+    cell.appendChild(lbl);
+    grid.appendChild(cell);
+  });
+  el.appendChild(grid);
+  tipLine(el, `each sprite drawn by running the game's ${G.sprites ? esc(G.sprites) : 'sprite'} routine in the SM83 emulator; checkerboard = transparent`);
+}
+const RENDERERS = {tiles: drawTiles, tilemap: drawTilemap, logo: drawLogo, header: drawHeader, sprites: drawSprites};
+const TYPE_TEXT = {tiles: 'tile sheets', tilemap: 'tilemaps', logo: 'logo', header: 'cartridge header', sprites: 'sprites'};
+function drawAsset(a, el, size) {
+  if (a.error) { el.innerHTML = `<span class="badv">${esc(a.error)}</span>`; return; }
+  const f = RENDERERS[a.type];
+  if (f) f(a, el, size); else el.innerHTML = `<span style="color:var(--muted)">no renderer for "${esc(a.type)}" yet</span>`;
+}
+function hexdump(a, max) {
+  const d = b64(a.bytes), out = [];
+  for (let i = 0; i < Math.min(d.length, max); i += 16)
+    out.push(hex4(a.start + i).slice(1) + '  ' + Array.from(d.slice(i, i + 16), b => b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
+  if (d.length > max) out.push(`… ${d.length - max} more bytes`);
+  return out.join('\n');
+}
+let assetCat = localStorage.getItem('gbbolt.assetcat') || 'all';
+
+// ---- audio: own controls (play/pause, seek bar, elapsed and remaining time), one track at a time
+const ICON_PLAY = '<svg viewBox="0 0 14 14"><path d="M3 1.5v11l9.5-5.5z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 14 14"><path d="M2.5 1.5h3.2v11H2.5zM8.3 1.5h3.2v11H8.3z"/></svg>';
+// m:ss, or seconds with tenths for clips under 10 s (most sound effects last a fraction of a second)
+const mmss = (s, total) => {
+  s = Math.max(0, s || 0);
+  if (total < 10) return s.toFixed(1);
+  s = Math.floor(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+};
+function playerHtml(src, seconds) {
+  return `<div class="player" data-src="${esc(src)}" data-dur="${seconds}"><button class="pp" aria-label="play">${ICON_PLAY}</button>` +
+    `<span class="tm el">${mmss(0, seconds)}</span><div class="track"><div class="fill"></div><div class="knob"></div></div><span class="tm left">-${mmss(seconds, seconds)}</span></div>`;
+}
+const player = (function () {
+  const audio = new Audio();
+  audio.preload = 'none';
+  let cur = null, raf = 0, dragging = false;
+  const dur = el => (cur === el && isFinite(audio.duration) && audio.duration) || +el.dataset.dur || 0;
+  function draw(el, t) {
+    const d = dur(el), f = d ? Math.min(1, t / d) : 0;
+    $('.fill', el).style.width = f * 100 + '%';
+    $('.knob', el).style.left = f * 100 + '%';
+    $('.el', el).textContent = mmss(t, d);
+    $('.left', el).textContent = '-' + mmss(d - t, d);
+  }
+  function setIcon(el, playing) {
+    el.classList.toggle('playing', playing);
+    $('.pp', el).innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
+    $('.pp', el).setAttribute('aria-label', playing ? 'pause' : 'play');
+  }
+  function tick() { if (cur && !dragging) draw(cur, audio.currentTime); raf = audio.paused ? 0 : requestAnimationFrame(tick); }
+  audio.addEventListener('play', () => { if (cur) setIcon(cur, true); if (!raf) raf = requestAnimationFrame(tick); });
+  audio.addEventListener('pause', () => { if (cur) { setIcon(cur, false); draw(cur, audio.currentTime); } });
+  audio.addEventListener('ended', () => { if (cur) { setIcon(cur, false); draw(cur, 0); } });
+  function select(el) {                    // make el the current track (stops the previous one)
+    if (cur === el) return;
+    if (cur) { audio.pause(); setIcon(cur, false); draw(cur, 0); }
+    cur = el;
+    audio.src = el.dataset.src;
+  }
+  function seek(el, f) {
+    select(el);
+    const go = () => { audio.currentTime = f * dur(el); draw(el, audio.currentTime); };
+    if (audio.readyState >= 1) go(); else { audio.addEventListener('loadedmetadata', go, {once: true}); audio.load(); }
+    draw(el, f * dur(el));
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.player .pp');
+    if (!b) return;
+    const el = b.closest('.player');
+    if (typeof musicStop === 'function' && music.playing) musicStop();
+    select(el);
+    if (audio.paused) audio.play(); else audio.pause();
+  });
+  document.addEventListener('pointerdown', e => {
+    const tr = e.target.closest('.player .track');
+    if (!tr) return;
+    const el = tr.closest('.player'), r = tr.getBoundingClientRect();
+    const frac = ev => Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+    dragging = true; tr.setPointerCapture(e.pointerId);
+    const wasPlaying = cur === el && !audio.paused;
+    draw(el, frac(e) * dur(el));
+    const move = ev => draw(el, frac(ev) * dur(el));
+    const up = ev => {
+      tr.removeEventListener('pointermove', move); tr.removeEventListener('pointerup', up);
+      dragging = false; seek(el, frac(ev));
+      if (wasPlaying && audio.paused) audio.play();
+    };
+    tr.addEventListener('pointermove', move); tr.addEventListener('pointerup', up);
+  });
+  return {stop: () => { if (cur) audio.pause(); cur = null; }};
+})();
+function renderAssets(sel) {
+  player.stop();
+  const root = $('#assets');
+  const palBtns = `<span class="seg" id="palsel">${Object.keys(PALETTES).map(k => `<button data-p="${k}" class="${k === palName ? 'on' : ''}">${k === 'dmg' ? 'DMG green' : 'grey'}</button>`).join('')}</span>`;
+  if (sel && ASSETS.has(sel)) {
+    const a = ASSETS.get(sel);
+    const users = a.users.length ? a.users.map(n => `<a class="chip" href="#/code/${encodeURIComponent(n)}">${esc(n)}</a>`).join(' ') : '<span style="color:var(--muted)">—</span>';
+    root.innerHTML = `<p style="margin-top:0"><a href="#/assets">← all assets</a></p>
+      <h1 style="font:600 18px var(--mono);margin:0 0 4px">${esc(a.name)} <span class="badge">${esc(a.type)}</span></h1>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:12px">${hex4(a.start)}–${hex4(a.start + a.length - 1)} · ${a.length} bytes</div>
+      <div class="adetail"><div><div class="astage" id="astage"></div><div style="margin-top:8px">${a.type === 'header' ? '' : palBtns}</div></div>
+        <div class="ameta"><p style="margin-top:0">${(a.doc || []).map(d => hl(d, 'doc')).join(' ')}</p>
+          <table class="kv">${Object.entries(a.params).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="m">${hl(v, 'doc')}</td></tr>`).join('')}
+          <tr><td>data</td><td><a href="#/code/${encodeURIComponent(a.name)}">${esc(a.name)} in the disassembly</a></td></tr>
+          <tr><td>used by</td><td>${users}</td></tr></table></div></div>
+      <h3>Bytes</h3><div class="hexdump">${esc(hexdump(a, 512))}</div>`;
+    drawAsset(a, $('#astage'), 'large');
+  } else {
+    const groups = {};
+    (D.assets || []).forEach(a => (groups[a.type] = groups[a.type] || []).push(a));
+    const order = ['header', 'logo', 'sprites', 'tilemap', 'tiles'].filter(t => groups[t]).concat(Object.keys(groups).filter(t => !RENDERERS[t]));
+    const kindText = (D.audio && D.audio.kinds) || {};
+    const audio = (D.audio && D.audio.items) || [];
+    const sections = order.map(type => ({key: type, label: TYPE_TEXT[type] || type, count: groups[type].length,
+      html: `<h3>${esc(TYPE_TEXT[type] || type)} (${groups[type].length})</h3><div class="agrid">${groups[type].map(a =>
+        `<a class="acard" href="#/assets/${encodeURIComponent(a.name)}"><div class="pv" data-a="${esc(a.name)}"></div><div class="cap"><b>${esc(a.name)}</b><div>${hex4(a.start)} · ${a.length} bytes</div></div></a>`).join('')}</div>`}));
+    const kinds = [...new Set(audio.map(a => a.kind))];
+    if (kinds.length) sections.push({key: 'audio', label: 'music & sound', count: audio.length,
+      html: `<h3>Music &amp; sound effects (${audio.length})</h3>
+      <p style="color:var(--muted);max-width:1000px;margin-top:0">Recorded from the game's own sound engine: it runs in the SM83 emulator (InitSound, then the request, then UpdateSound once per frame), every write to the sound registers goes into a model of the Game Boy APU, and ffmpeg encodes the result. Songs are rendered once through and loop from their loop point (↻). The <a href="#/music">Music</a> view shows each one as a piano roll with mute / solo per channel.</p>` +
+      kinds.map(k => `<div style="font-weight:600;margin:14px 0 6px">${kindText[k]}</div><div class="agrid">${audio.filter(a => a.kind === k).map(a =>
+        `<div class="acard" style="padding:10px 12px;gap:6px"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-family:var(--mono)">${k} $${a.id.toString(16).toUpperCase().padStart(2, '0')}</b><span style="color:var(--muted);font-size:12px">${a.loop !== null && a.loop !== undefined ? '↻ ' : ''}${a.seconds} s · <a href="#/music/${itemKey(a)}">piano roll →</a></span></div>
+         <div style="font-size:13px">${esc(a.name)}</div><div style="color:var(--muted);font-size:12px">requested by ${hl(a.usedBy, 'doc')}</div>
+         ${playerHtml(a.file, a.seconds)}</div>`).join('')}</div>`).join('')});
+    if (!sections.some(s => s.key === assetCat)) assetCat = 'all';
+    const menu = `<span class="seg" id="acats"><button data-c="all" class="${assetCat === 'all' ? 'on' : ''}">all</button>${sections.map(s =>
+      `<button data-c="${esc(s.key)}" class="${assetCat === s.key ? 'on' : ''}">${esc(s.label)} <span style="color:var(--muted)">${s.count}</span></button>`).join('')}</span>`;
+    root.innerHTML = `<p style="color:var(--muted);margin:0 0 10px;max-width:1000px">Data marked with <span class="kbd">;@ asset: &lt;type&gt;</span> in the disassembly, rendered straight from the ROM bytes. Tilemaps use the tiles the game itself loads: the generator runs the loading routine in the SM83 emulator and keeps the resulting VRAM.</p>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-width:1400px">${menu}<span class="spacer"></span>${palBtns}</div>` +
+      sections.filter(s => assetCat === 'all' || s.key === assetCat).map(s => s.html).join('');
+    $$('.pv[data-a]', root).forEach(el => drawAsset(ASSETS.get(el.dataset.a), el, 'small'));
+    $$('#acats button', root).forEach(b => b.onclick = () => { assetCat = b.dataset.c; localStorage.setItem('gbbolt.assetcat', assetCat); renderAssets(); });
+  }
+  $$('#palsel button', root).forEach(b => b.onclick = () => { palName = b.dataset.p; localStorage.setItem('gbbolt.palette', palName); renderAssets(sel); });
+}
+
+// ---------------------------------------------------------------- music view
+// Piano roll of the game's sound engine output: per channel the notes with their
+// frequency and volume frame by frame (envelopes fade, sweeps slant, vibrato
+// wobbles), mixer strips with the channel settings at the playhead, the song's
+// pattern structure, a tracker table, and mute / solo over 4 per-channel tracks.
+const AUDIO = (D.audio && D.audio.items) || [];
+const AUDIO_KINDS = (D.audio && D.audio.kinds) || {};
+const CH_NAMES = ['Square 1', 'Square 2', 'Wave', 'Noise'];
+const CH_HUE = [24, 200, 280, 145];
+const chColor = (i, a) => `hsla(${CH_HUE[i]}, 72%, ${document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches) ? 62 : 46}%, ${a})`;
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const itemKey = it => `${it.kind}_${it.id.toString(16).toUpperCase().padStart(2, '0')}`;
+const tlKey = it => `${it.kind} ${it.id}`;
+const hzOf = (ch, f) => ch === 2 ? 65536 / (2048 - f) : 131072 / (2048 - f);
+const noiseHz = n => 524288 / (n[2] || 0.5) / Math.pow(2, n[0] + 1);
+const midiOf = hz => 69 + 12 * Math.log2(hz / 440);
+const noteName = m => { const r = Math.round(m); return NOTE_NAMES[((r % 12) + 12) % 12] + (Math.floor(r / 12) - 1); };
+const fmtT = (s, total) => mmss(s, total);
+function unitAt(a) {
+  let lo = 0, hi = D.units.length - 1;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (D.units[m].s <= a) lo = m; else hi = m - 1; }
+  const u = D.units[lo];
+  return u && u.s <= a && a < u.e ? u : null;
+}
+function soundName(own) {                 // 'sfx 7' -> the effect's name from src/sound.json
+  const [k, n] = own.split(' ');
+  const it = AUDIO.find(x => x.kind === k && x.id === +n);
+  return it ? it.name : own;
+}
+
+const music = {
+  item: null, tl: null, view: localStorage.getItem('gbbolt.mview') || 'roll',
+  pps: +(localStorage.getItem('gbbolt.mzoom') || 140),      // pixels per second
+  els: [], mute: [false, false, false, false], solo: [false, false, false, false],
+  playing: false, t: 0, follow: true, viewT0: 0, raf: 0, lastFrame: -1,
+};
+
+function loadTimeline(it, cb) {
+  const key = tlKey(it);
+  if (window.GB_TIMELINES && window.GB_TIMELINES[key]) return cb(window.GB_TIMELINES[key]);
+  const s = document.createElement('script');
+  s.src = it.timeline;
+  s.onload = () => cb((window.GB_TIMELINES || {})[key]);
+  s.onerror = () => cb(null);
+  document.head.appendChild(s);
+}
+
+function renderMusic(arg) {
+  if (!AUDIO.length) {
+    $('#mmain').innerHTML = '<div class="placeholder">No sound rendered yet: run <span class="kbd">python tools/audio.py</span>, then <span class="kbd">python tools/gbbolt.py site</span>.</div>';
+    return;
+  }
+  const it = AUDIO.find(x => itemKey(x) === arg) || (music.item && AUDIO.includes(music.item) ? music.item : AUDIO[0]);
+  // the list
+  const kinds = [...new Set(AUDIO.map(x => x.kind))];
+  $('#mlist').innerHTML = kinds.map(k => `<div class="grp">${esc(AUDIO_KINDS[k] || k)}</div>` + AUDIO.filter(x => x.kind === k).map(x =>
+    `<a href="#/music/${itemKey(x)}" class="${x === it ? 'on' : ''}"><span class="id">${x.id.toString(16).toUpperCase().padStart(2, '0')}</span><span class="nm" title="${esc(x.name)}">${esc(x.name)}</span><span class="du">${x.loop !== null && x.loop !== undefined ? '↻' : ''}${fmtT(x.seconds, x.seconds)}</span></a>`).join('')).join('');
+  if (music.item === it) return;
+  musicStop();
+  music.item = it; music.tl = null; music.t = 0; music.viewT0 = 0; music.follow = true; music.lastFrame = -1;
+  music.mute = [false, false, false, false]; music.solo = [false, false, false, false];   // every sound starts with all channels on
+  $('#mtitle').innerHTML = `<b>${esc(it.name)}</b><div>${esc(it.kind)} $${it.id.toString(16).toUpperCase().padStart(2, '0')} · requested by ${hl(it.usedBy || '—', 'doc')}${it.loop !== null && it.loop !== undefined ? ` · loops from ${fmtT(it.loop, it.seconds)}` : ''}</div>`;
+  music.els.forEach(a => { a.pause(); a.src = ''; });
+  music.els = (it.stems || [it.file]).map(src => { const a = new Audio(); a.preload = 'auto'; a.src = src; return a; });
+  music.els[0].addEventListener('ended', musicEnded);
+  applyMute();
+  setPlayIcon(false);
+  $('#mtrack').querySelectorAll('.loopmark').forEach(e => e.remove());
+  if (it.loop !== null && it.loop !== undefined && it.loop > 0) {
+    const m = document.createElement('div'); m.className = 'loopmark'; m.style.left = (100 * it.loop / it.seconds) + '%'; m.title = 'loop point';
+    $('#mtrack').appendChild(m);
+  }
+  $('#mstrips').innerHTML = CH_NAMES.map((n, i) => `<div class="strip" data-ch="${i}" style="--cc:${chColor(i, 1)}">
+    <div class="hd"><span>${n}</span><span class="sp"></span><button class="mute" title="mute">M</button><button class="solo" title="solo">S</button></div>
+    <div class="row1"><span class="note">—</span><span class="hz"></span></div>
+    <div class="meter">${'<i></i>'.repeat(15)}</div>
+    <div class="info"></div><div class="own"></div></div>`).join('');
+  $$('#mstrips .strip').forEach(s => {
+    const i = +s.dataset.ch;
+    $('.mute', s).onclick = () => { music.mute[i] = !music.mute[i]; applyMute(); };
+    $('.solo', s).onclick = () => { music.solo[i] = !music.solo[i]; applyMute(); };
+  });
+  applyMute();
+  $('#mstruct').innerHTML = '';
+  loadTimeline(it, tl => {
+    if (music.item !== it) return;
+    music.tl = tl;
+    if (tl) {
+      tl.maxVol = tl.ch.map(ns => Math.max(1, ...ns.map(n => Math.max(...n.v.map(v => v[1])))));
+      const nh = tl.ch[3].map(n => Math.log2(noiseHz(n.noise || [0, 0, 0])));
+      tl.noiseRange = nh.length ? [Math.min(...nh) - 0.5, Math.max(...nh) + 0.5] : [8, 20];
+      const w = $('#mroll').clientWidth - 46;
+      music.fit = it.seconds * music.pps < w * 0.6 ? w * 0.92 / it.seconds : 0;
+    }
+    if (!tl) { $('#mtracker').innerHTML = '<div class="placeholder">Timeline missing - run tools/audio.py again.</div>'; return; }
+    buildStructure(); buildTracker(); setView(music.view); drawMusic(true);
+  });
+  updateTransport();
+}
+
+function applyMute() {
+  const anySolo = music.solo.some(Boolean);
+  music.els.forEach((a, i) => { a.muted = music.els.length === 4 ? (anySolo ? !music.solo[i] : music.mute[i]) : false; });
+  $$('#mstrips .strip').forEach(s => {
+    const i = +s.dataset.ch;
+    $('.mute', s).classList.toggle('on', music.mute[i]);
+    $('.solo', s).classList.toggle('on', music.solo[i]);
+    s.classList.toggle('quiet', anySolo ? !music.solo[i] : music.mute[i]);
+  });
+}
+function setPlayIcon(on) { $('#mplay').innerHTML = on ? ICON_PAUSE : ICON_PLAY; $('#mplay').setAttribute('aria-label', on ? 'pause' : 'play'); }
+function musicPlay() {
+  if (!music.item) return;
+  player.stop();
+  if (music.t >= music.item.seconds - 0.02) music.t = 0;
+  music.els.forEach(a => { a.currentTime = music.t; });
+  Promise.all(music.els.map(a => a.play().catch(() => {}))).then(() => {});
+  music.playing = true; music.follow = true; setPlayIcon(true);
+  if (!music.raf) music.raf = requestAnimationFrame(musicTick);
+}
+function musicStop() {
+  music.els.forEach(a => a.pause());
+  music.playing = false; setPlayIcon(false);
+  cancelAnimationFrame(music.raf); music.raf = 0;
+}
+function musicSeek(t) {
+  music.t = Math.max(0, Math.min(t, music.item ? music.item.seconds : 0));
+  music.els.forEach(a => { try { a.currentTime = music.t; } catch (e) {} });
+  music.follow = true;
+  drawMusic(true);
+}
+function musicEnded() {
+  const it = music.item;
+  if (it && it.loop !== null && it.loop !== undefined && music.playing) { musicSeek(it.loop); musicPlay(); }
+  else { musicStop(); music.t = it ? it.seconds : 0; drawMusic(true); }
+}
+let lastSync = 0;
+function musicTick(now) {
+  music.raf = 0;
+  if (!music.playing) return;
+  const m = music.els[0];
+  music.t = m.currentTime;
+  if (now - lastSync > 300) {               // keep the 4 tracks together
+    lastSync = now;
+    music.els.slice(1).forEach(a => { if (Math.abs(a.currentTime - music.t) > 0.04) a.currentTime = music.t; });
+  }
+  if (music.item.loop !== null && music.item.loop !== undefined && music.t >= music.item.seconds - 0.03) { musicSeek(music.item.loop); }
+  drawMusic(false);
+  music.raf = requestAnimationFrame(musicTick);
+}
+$('#mplay').onclick = () => (music.playing ? musicStop() : musicPlay());
+document.addEventListener('keydown', e => {
+  if (current.view !== 'music' || e.target.matches('input, textarea') || e.code !== 'Space') return;
+  e.preventDefault(); music.playing ? musicStop() : musicPlay();
+});
+(function () {                              // transport seek bar
+  const tr = $('#mtrack');
+  tr.addEventListener('pointerdown', e => {
+    if (!music.item) return;
+    const r = tr.getBoundingClientRect(), frac = ev => Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+    tr.setPointerCapture(e.pointerId);
+    musicSeek(frac(e) * music.item.seconds);
+    const move = ev => musicSeek(frac(ev) * music.item.seconds);
+    const up = () => { tr.removeEventListener('pointermove', move); tr.removeEventListener('pointerup', up); };
+    tr.addEventListener('pointermove', move); tr.addEventListener('pointerup', up);
+  });
+})();
+function updateTransport() {
+  const it = music.item; if (!it) return;
+  const f = it.seconds ? music.t / it.seconds : 0;
+  $('#mtrack .fill').style.width = f * 100 + '%';
+  $('#mtrack .knob').style.left = f * 100 + '%';
+  $('#mel').textContent = fmtT(music.t, it.seconds);
+  $('#mleft').textContent = '-' + fmtT(it.seconds - music.t, it.seconds);
+}
+$$('#mviewsel button').forEach(b => b.onclick = () => setView(b.dataset.v));
+function setView(v) {
+  music.view = v; localStorage.setItem('gbbolt.mview', v);
+  $$('#mviewsel button').forEach(x => x.classList.toggle('on', x.dataset.v === v));
+  $('#mroll').style.display = v === 'roll' ? '' : 'none';
+  $('#mtracker').style.display = v === 'tracker' ? 'block' : 'none';
+  $('#mzoom').style.display = v === 'roll' ? '' : 'none';
+  drawMusic(true);
+}
+$$('#mzoom button').forEach(b => b.onclick = () => {
+  music.pps = Math.max(20, Math.min(4000, (music.fit || music.pps) * (b.dataset.z > 0 ? 1.5 : 1 / 1.5))); music.fit = 0;
+  localStorage.setItem('gbbolt.mzoom', Math.round(music.pps)); drawMusic(true);
+});
+
+// --- note lookup helpers
+function noteAt(ch, frame) {                // the note sounding on channel ch at a frame
+  const ns = music.tl.ch[ch];
+  let lo = 0, hi = ns.length - 1, best = null;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (ns[m].t <= frame) { best = m; lo = m + 1; } else hi = m - 1; }
+  if (best === null) return null;
+  const n = ns[best];
+  return frame < n.t + n.d ? n : null;
+}
+const valAt = (pairs, k) => { let v = pairs[0][1]; for (const [o, x] of pairs) { if (o > k) break; v = x; } return v; };
+const listAt = (pairs, frame) => { let v = pairs.length ? pairs[0][1] : 0; for (const [f, x] of pairs) { if (f > frame) break; v = x; } return v; };
+function pitchOf(ch, n, freq) { return ch === 3 ? null : midiOf(hzOf(ch, freq)); }
+
+// --- drawing
+function drawMusic(full) {
+  const it = music.item, tl = music.tl;
+  updateTransport();
+  if (!it || !tl) return;
+  const frame = Math.min(tl.frames - 1, Math.floor(music.t * tl.fps));
+  if (frame !== music.lastFrame || full) { updateStrips(frame); music.lastFrame = frame; }
+  // structure playhead
+  const ph = $('#mstruct .ph'); if (ph) ph.style.left = (100 * music.t / it.seconds) + '%';
+  if (music.view === 'tracker') { trackerFollow(frame); return; }
+  drawRoll();
+}
+
+function rollGeometry() {
+  const tl = music.tl, cv = $('#mroll');
+  const W = cv.clientWidth, H = cv.clientHeight;
+  let lo = 127, hi = 0;
+  for (let ch = 0; ch < 3; ch++) for (const n of tl.ch[ch]) for (const [, f] of n.f) {
+    if (f >= 2048) continue;
+    const m = midiOf(hzOf(ch, f)); if (m < lo) lo = m; if (m > hi) hi = m;
+  }
+  if (lo > hi) { lo = 48; hi = 84; }
+  lo = Math.floor(lo) - 2; hi = Math.ceil(hi) + 2;
+  const hasNoise = tl.ch[3].length > 0;
+  const tonal = tl.ch.slice(0, 3).some(ns => ns.length);
+  const noiseH = !hasNoise ? 0 : tonal ? Math.min(90, Math.max(44, H * 0.16)) : H * 0.62;   // noise only: give it the room
+  const top = 22, gutter = 46;
+  const pitchH = H - top - noiseH - (hasNoise ? 10 : 0) - 6;
+  const row = pitchH / (hi - lo + 1);
+  return {W, H, lo, hi, row, top, gutter, noiseTop: top + pitchH + 10, noiseH};
+}
+
+function drawRoll() {
+  const it = music.item, tl = music.tl, cv = $('#mroll');
+  const dpr = window.devicePixelRatio || 1;
+  if (cv.width !== Math.round(cv.clientWidth * dpr) || cv.height !== Math.round(cv.clientHeight * dpr)) {
+    cv.width = Math.round(cv.clientWidth * dpr); cv.height = Math.round(cv.clientHeight * dpr);
+  }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const g = music.geo = rollGeometry();
+  const pps = music.fit || music.pps;
+  const span = (g.W - g.gutter) / pps;
+  if (music.follow && music.playing) music.viewT0 = Math.max(0, music.t - span * 0.25);
+  if (music.follow && !music.playing && (music.t < music.viewT0 || music.t > music.viewT0 + span)) music.viewT0 = Math.max(0, music.t - span * 0.25);
+  const t0 = music.viewT0, x = t => g.gutter + (t - t0) * pps;
+  const yOf = m => g.top + (g.hi - m) * g.row;
+  const css = n => cssVar(n);
+  ctx.fillStyle = css('--panel'); ctx.fillRect(0, 0, g.W, g.H);
+  // pitch grid: octave lines, black keys shaded
+  for (let m = g.lo; m <= g.hi; m++) {
+    const y = yOf(m) - g.row / 2;
+    if ([1, 3, 6, 8, 10].includes(((m % 12) + 12) % 12)) { ctx.fillStyle = css('--panel2'); ctx.fillRect(g.gutter, y, g.W, g.row); }
+    if (((m % 12) + 12) % 12 === 0) {
+      ctx.fillStyle = css('--border'); ctx.fillRect(g.gutter, y + g.row, g.W, 1);
+      ctx.fillStyle = css('--muted'); ctx.font = '10px ' + css('--mono'); ctx.textBaseline = 'middle';
+      ctx.fillText('C' + (m / 12 - 1), 8, y + g.row / 2);
+    }
+  }
+  // time grid
+  ctx.font = '10px ' + css('--mono'); ctx.textBaseline = 'top';
+  const step = pps > 1200 ? 0.05 : pps > 600 ? 0.1 : pps > 300 ? 0.25 : pps > 90 ? 1 : pps > 40 ? 2 : 5;
+  for (let s = Math.ceil(t0 / step - 1e-9) * step; s < t0 + (g.W - g.gutter) / pps; s += step) {
+    const xx = x(s);
+    ctx.fillStyle = css('--border'); ctx.fillRect(xx, g.top - 4, 1, g.H - g.top);
+    ctx.fillStyle = css('--muted'); ctx.fillText(fmtT(s, it.seconds), xx + 3, 4);
+  }
+  if (tl.loopStart) { const lx = x(tl.loopStart / tl.fps); ctx.fillStyle = css('--chk'); ctx.fillRect(lx, 0, 2, g.H); ctx.fillText('loop', lx + 4, 4); }
+  if (g.noiseH) {
+    ctx.fillStyle = css('--panel2'); ctx.fillRect(g.gutter, g.noiseTop, g.W, g.noiseH);
+    ctx.fillStyle = css('--muted'); ctx.fillText('noise', 6, g.noiseTop + 2);
+  }
+  // notes: one rectangle per run of constant frequency and volume
+  const fps = tl.fps, f0 = Math.floor(t0 * fps), f1 = Math.ceil((t0 + (g.W - g.gutter) / pps) * fps);
+  const playFrame = Math.floor(music.t * fps);
+  const lastFx = [null, null, null, null];
+  for (let ch = 0; ch < 4; ch++) {
+    for (const n of tl.ch[ch]) {
+      if (n.t > f1 || n.t + n.d < f0) { if (n.own !== 'music') lastFx[ch] = {own: n.own, end: n.t + n.d}; continue; }
+      const fx = n.own !== 'music';
+      const active = playFrame >= n.t && playFrame < n.t + n.d;
+      const cuts = [...new Set([0, ...n.f.map(p => p[0]), ...n.v.map(p => p[0]), n.d])].filter(k => k <= n.d).sort((a, b) => a - b);
+      for (let k = 0; k < cuts.length - 1; k++) {
+        const a = cuts[k], b = cuts[k + 1], freq = valAt(n.f, a), vol = valAt(n.v, a);
+        if (!vol) continue;
+        const xa = x((n.t + a) / fps), xb = x((n.t + b) / fps);
+        let yc, hgt;
+        const norm = vol / tl.maxVol[ch];          // relative to the loudest moment of this channel
+        if (ch === 3) {
+          const nz = n.noise || [0, 0, 0], [lo, hi] = tl.noiseRange;
+          const frac = Math.min(1, Math.max(0, (Math.log2(noiseHz(nz)) - lo) / (hi - lo || 1)));
+          yc = g.noiseTop + 6 + (g.noiseH - 12) * (1 - frac); hgt = Math.max(4, g.noiseH * 0.22) * (0.45 + 0.55 * norm);
+        } else {
+          if (freq >= 2048) continue;
+          yc = yOf(midiOf(hzOf(ch, freq))); hgt = Math.max(3, (g.row - 1) * (0.45 + 0.55 * norm));
+        }
+        ctx.fillStyle = chColor(ch, (active ? 0.5 : 0.3) + 0.6 * norm);
+        ctx.fillRect(xa, yc - hgt / 2, Math.max(1, xb - xa - 0.25), hgt);
+        if (fx) {                                // owned by an effect: amber top and bottom edges
+          ctx.fillStyle = css('--chk');
+          ctx.fillRect(xa, yc - hgt / 2 - 1, Math.max(1, xb - xa), 1.5);
+          ctx.fillRect(xa, yc + hgt / 2 - 0.5, Math.max(1, xb - xa), 1.5);
+        }
+      }
+      if (fx && !(lastFx[ch] && lastFx[ch].own === n.own && n.t - lastFx[ch].end < 30)) {   // label each run of effect notes once
+        const xs = x(n.t / fps), xe = x((n.t + n.d) / fps);
+        const freq0 = n.f[0][1];
+        const yl = ch === 3 ? g.noiseTop + 10 : yOf(midiOf(hzOf(ch, Math.min(2047, freq0)))) - g.row - 2;
+        ctx.fillStyle = css('--chk'); ctx.font = '600 10px ' + css('--sans'); ctx.textBaseline = 'bottom'; ctx.fillText(n.own, xs, yl);
+      }
+      if (fx) lastFx[ch] = {own: n.own, end: n.t + n.d};
+    }
+  }
+  // playhead
+  const px = x(music.t);
+  ctx.fillStyle = css('--fail'); ctx.fillRect(px - 1, 0, 2, g.H);
+  // keyboard gutter
+  ctx.fillStyle = css('--panel'); ctx.fillRect(0, g.top, g.gutter - 4, g.H);
+  ctx.fillStyle = css('--muted'); ctx.font = '10px ' + css('--mono'); ctx.textBaseline = 'middle';
+  for (let m = g.lo; m <= g.hi; m++) if (((m % 12) + 12) % 12 === 0) ctx.fillText('C' + (m / 12 - 1), 8, yOf(m));
+  if (g.noiseH) ctx.fillText('noise', 6, g.noiseTop + g.noiseH / 2);
+}
+
+// roll interaction: wheel / drag scrolls (stops following), hover shows a note, click seeks or opens its byte
+(function () {
+  const cv = $('#mroll');
+  let drag = null;
+  cv.addEventListener('wheel', e => {
+    if (!music.tl) return;
+    e.preventDefault();
+    if (e.ctrlKey) { music.pps = Math.max(20, Math.min(4000, (music.fit || music.pps) * (e.deltaY < 0 ? 1.15 : 1 / 1.15))); music.fit = 0; localStorage.setItem('gbbolt.mzoom', Math.round(music.pps)); }
+    else { music.viewT0 = Math.max(0, music.viewT0 + (e.deltaX || e.deltaY) / (music.fit || music.pps)); music.follow = false; }
+    drawMusic(true);
+  }, {passive: false});
+  cv.addEventListener('pointerdown', e => { drag = {x: e.clientX, t0: music.viewT0, moved: false}; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => {
+    if (drag && Math.abs(e.clientX - drag.x) > 3) {
+      drag.moved = true; music.follow = false;
+      music.viewT0 = Math.max(0, drag.t0 - (e.clientX - drag.x) / (music.fit || music.pps)); drawMusic(true);
+    }
+    showTip(e);
+  });
+  cv.addEventListener('pointerup', e => {
+    const d = drag; drag = null;
+    if (!d || d.moved || !music.tl) return;
+    const g = music.geo, r = cv.getBoundingClientRect();
+    if (e.clientX - r.left > g.gutter) musicSeek(music.viewT0 + (e.clientX - r.left - g.gutter) / (music.fit || music.pps));
+  });
+  cv.addEventListener('dblclick', e => { const hit = hitNote(e); if (hit && hit.n.src !== undefined) openSource(hit.n.src); });
+  cv.addEventListener('pointerleave', () => { $('#mtip').style.display = 'none'; });
+})();
+function hitNote(e) {
+  const g = music.geo, tl = music.tl; if (!g || !tl) return null;
+  const r = $('#mroll').getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+  const frame = Math.floor((music.viewT0 + (mx - g.gutter) / (music.fit || music.pps)) * tl.fps);
+  let best = null;
+  for (let ch = 3; ch >= 0; ch--) {
+    const n = noteAt(ch, frame); if (!n) continue;
+    const k = frame - n.t, freq = valAt(n.f, k), vol = valAt(n.v, k);
+    let yc;
+    if (ch === 3) { if (my < g.noiseTop || my > g.noiseTop + g.noiseH) continue; yc = my; }
+    else { if (freq >= 2048) continue; yc = g.top + (g.hi - midiOf(hzOf(ch, freq))) * g.row; }
+    const dist = Math.abs(my - yc);
+    if (dist <= Math.max(5, g.row) && (!best || dist < best.dist)) best = {ch, n, k, freq, vol, dist};
+  }
+  return best;
+}
+function showTip(e) {
+  const tip = $('#mtip'), hit = hitNote(e);
+  if (!hit) { tip.style.display = 'none'; return; }
+  const {ch, n, freq, vol} = hit, tl = music.tl;
+  const lines = [`<b style="--cc:${chColor(ch, 1)};color:${chColor(ch, 1)}">${CH_NAMES[ch]}</b>  ${ch === 3 ? 'noise' : noteName(midiOf(hzOf(ch, freq)))}` + (ch === 3 ? '' : `  ${hzOf(ch, freq).toFixed(1)} Hz`)];
+  lines.push(`${(n.d / tl.fps).toFixed(2)} s (${n.d} frames) · volume ${vol}/15`);
+  if (n.duty !== undefined) lines.push(`duty ${['12.5', '25', '50', '75'][n.duty]}%`);
+  if (n.env) lines.push(`envelope: start ${n.env[0]}, ${n.env[2] ? (n.env[1] ? 'up' : 'down') + ' every ' + n.env[2] + '/64 s' : 'steady'}`);
+  if (n.sweep) lines.push(`sweep: ${n.sweep[1] ? 'down' : 'up'}, shift ${n.sweep[2]}, every ${n.sweep[0]}/128 s`);
+  if (n.noise) lines.push(`noise: ${n.noise[1] ? '7-bit (metallic)' : '15-bit'}, shift ${n.noise[0]}, divider ${n.noise[2]}`);
+  if (n.wave !== undefined) lines.push(`waveform #${n.wave + 1}`);
+  lines.push(n.own === 'music' ? 'music' : `effect: ${esc(soundName(n.own))} (${n.own})`);
+  if (n.src !== undefined) { const u = unitAt(n.src); lines.push(`pattern byte ${hex4(n.src)}${u ? ' in ' + esc(u.n) : ''} — double-click to open`); }
+  tip.innerHTML = lines.join('<br>');
+  const r = $('#mstage').getBoundingClientRect();
+  tip.style.display = 'block';
+  tip.style.left = Math.min(e.clientX - r.left + 14, r.width - tip.offsetWidth - 8) + 'px';
+  tip.style.top = Math.min(e.clientY - r.top + 14, r.height - tip.offsetHeight - 8) + 'px';
+}
+function openSource(addr) {
+  const u = unitAt(addr);
+  if (u) location.hash = `#/code/${encodeURIComponent(u.n)}@${addr.toString(16).toUpperCase().padStart(4, '0')}`;
+}
+
+// --- mixer strips
+function dutySvg(d) {
+  const w = [0.125, 0.25, 0.5, 0.75][d] * 18;
+  let p = 'M0,18';
+  for (let k = 0; k < 3; k++) { const x0 = k * 18; p += ` L${x0},4 L${x0 + w},4 L${x0 + w},18 L${x0 + 18},18`; }
+  return `<svg viewBox="0 0 54 22"><path d="${p}"/></svg>`;
+}
+function waveSvg(hex) {
+  const s = []; for (let i = 0; i < 16; i++) { const b = parseInt(hex.substr(i * 2, 2), 16); s.push(b >> 4, b & 15); }
+  return `<svg viewBox="0 0 54 22"><path d="${s.map((v, i) => `${i ? 'L' : 'M'}${(i * 54 / 31).toFixed(1)},${(20 - v * 1.2).toFixed(1)}`).join(' ')}"/></svg>`;
+}
+function updateStrips(frame) {
+  const tl = music.tl;
+  const pan = listAt(tl.pan, frame);
+  $$('#mstrips .strip').forEach(s => {
+    const ch = +s.dataset.ch, n = noteAt(ch, frame);
+    const k = n ? frame - n.t : 0, freq = n ? valAt(n.f, k) : 0, vol = n ? valAt(n.v, k) : 0;
+    $('.note', s).textContent = n && vol ? (ch === 3 ? 'noise' : noteName(midiOf(hzOf(ch, freq)))) : '—';
+    $('.hz', s).textContent = n && vol ? (ch === 3 ? noiseHz(n.noise).toFixed(0) + ' Hz clock' : hzOf(ch, freq).toFixed(1) + ' Hz · $' + freq.toString(16).toUpperCase().padStart(3, '0')) : '';
+    $$('.meter i', s).forEach((m, i) => m.classList.toggle('on', i < vol));
+    let info = '';
+    if (n) {
+      if (n.duty !== undefined) info += dutySvg(n.duty) + `${['12.5', '25', '50', '75'][n.duty]}%`;
+      if (n.wave !== undefined && tl.waves[n.wave]) info += waveSvg(tl.waves[n.wave]) + `wave #${n.wave + 1}`;
+      if (n.noise) info += `${n.noise[1] ? '7-bit' : '15-bit'} s${n.noise[0]} d${n.noise[2]}`;
+      if (n.env) info += ` · env ${n.env[0]}${n.env[2] ? (n.env[1] ? '↑' : '↓') + n.env[2] : ''}`;
+      if (n.sweep) info += ` · sweep ${n.sweep[1] ? '↓' : '↑'}${n.sweep[2]}/${n.sweep[0]}`;
+    }
+    info += `<span class="lr" title="panning (NR51)"><span class="${pan & (1 << (ch + 4)) ? 'on' : ''}">L</span><span class="${pan & (1 << ch) ? 'on' : ''}">R</span></span>`;
+    $('.info', s).innerHTML = info;
+    const own = $('.own', s), fx = n && n.own !== 'music';
+    own.textContent = n ? (fx ? 'effect: ' + soundName(n.own) : 'music') : '';
+    own.classList.toggle('fx', !!fx);
+  });
+}
+
+// --- song structure (pattern list) strip
+function buildStructure() {
+  const tl = music.tl, it = music.item, el = $('#mstruct');
+  if (!tl.sections || !tl.sections.some(s => s.length)) { el.innerHTML = ''; return; }
+  const total = tl.frames;
+  el.innerHTML = tl.sections.map((secs, ch) => {
+    if (!secs.length) return '';
+    const pats = [...new Set(secs.map(s => s[1]))];
+    return `<div class="srow"><span class="lbl" style="color:${chColor(ch, 1)}">${['sq1', 'sq2', 'wave', 'noise'][ch]}</span>` + secs.map((s, i) => {
+      const end = i + 1 < secs.length ? secs[i + 1][0] : total;
+      const idx = pats.indexOf(s[1]);
+      const u = unitAt(s[1]);
+      return `<div class="sec" data-t="${s[0]}" title="${esc(u && u.s === s[1] ? u.n : 'pattern')} at ${hex4(s[1])} — from ${fmtT(s[0] / tl.fps, it.seconds)}" style="left:${100 * s[0] / total}%;width:${100 * (end - s[0]) / total}%;--h:${CH_HUE[ch] + idx * 23};--a:${0.18 + 0.12 * (idx % 3)}">${esc(patternName(s[1]))}</div>`;
+    }).join('') + '</div>';
+  }).join('') + '<div class="ph"></div>';
+  $$('#mstruct .sec').forEach(d => d.onclick = () => musicSeek(+d.dataset.t / tl.fps));
+}
+
+// --- tracker table: one row per frame where a note starts
+const fmtCs = s => Math.floor(s / 60) + ':' + (s % 60).toFixed(2).padStart(5, '0');    // m:ss.cc
+// a pattern's name (its label), shortened: Song05Pat3 -> Pat3
+function patternName(addr) {
+  const u = unitAt(addr);
+  return u && u.s === addr ? u.n.replace(/^Song[0-9A-F]{2}/, '') : hex4(addr).slice(1);
+}
+function buildTracker() {
+  const tl = music.tl, it = music.item;
+  const starts = new Map();
+  tl.ch.forEach((ns, ch) => ns.forEach(n => { if (!starts.has(n.t)) starts.set(n.t, [null, null, null, null]); starts.get(n.t)[ch] = n; }));
+  const rows = [...starts.keys()].sort((a, b) => a - b);
+  music.trackRows = rows;
+  const cell = (n, ch) => {
+    if (!n) return '<td></td>';
+    const v0 = n.v[0][1];
+    const name = ch === 3 ? 'nz' : (n.f[0][1] < 2048 ? noteName(midiOf(hzOf(ch, n.f[0][1]))) : '?');
+    const extra = [n.duty !== undefined ? 'd' + n.duty : '', n.wave !== undefined ? 'w' + (n.wave + 1) : '', n.env ? 'v' + n.env[0] + (n.env[2] ? (n.env[1] ? '↑' : '↓') + n.env[2] : '') : 'v' + v0,
+      n.sweep ? 'sw' : '', n.noise ? 's' + n.noise[0] + 'd' + n.noise[2] : '', n.d + 'f'].filter(Boolean).join(' ');
+    return `<td class="${n.own !== 'music' ? 'fx' : ''}" style="--cc:${chColor(ch, 1)}" title="${n.own !== 'music' ? esc(soundName(n.own)) : ''}${n.src !== undefined ? ' ' + hex4(n.src) : ''}"><span class="n">${name}</span> <span class="x">${extra}</span></td>`;
+  };
+  $('#mtracker').innerHTML = `<table><tr><th>time</th>${CH_NAMES.map((n, i) => `<th style="color:${chColor(i, 1)}">${n}</th>`).join('')}</tr>` +
+    rows.map(f => `<tr data-f="${f}"><td class="t">${fmtCs(f / tl.fps)}</td>${starts.get(f).map(cell).join('')}</tr>`).join('') + '</table>';
+  $$('#mtracker tr[data-f]').forEach(r => r.onclick = () => musicSeek(+r.dataset.f / tl.fps));
+}
+function trackerFollow(frame) {
+  const rows = music.trackRows || [];
+  let lo = 0, hi = rows.length - 1, best = -1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (rows[m] <= frame) { best = m; lo = m + 1; } else hi = m - 1; }
+  const prev = $('#mtracker tr.cur'); if (prev) prev.classList.remove('cur');
+  if (best < 0) return;
+  const tr = $$('#mtracker tr[data-f]')[best];
+  if (tr) {
+    tr.classList.add('cur');
+    if (music.playing) { const box = $('#mtracker'); const y = tr.offsetTop - box.clientHeight * 0.35; if (Math.abs(box.scrollTop - y) > 4) box.scrollTop = y; }
+  }
+}
+new ResizeObserver(() => { if (current.view === 'music') drawMusic(true); }).observe($('#mstage'));
+
+route();
+</script>
+</body>
+</html>
