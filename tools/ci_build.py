@@ -38,9 +38,17 @@ def main():
             if not os.path.exists(root):
                 run(['git', 'clone', '--depth', '1', 'https://github.com/{}.git'.format(g['repo']), root], ENGINE, os.environ)
         env = dict(os.environ, GBBOLT_ROOT=root, GBBOLT_GAMES=games_json)
+        # asset plugin results from earlier runs (CI keeps .gencache between builds): a plugin
+        # that has not changed is not run again
+        cache = os.path.join(ENGINE, '.gencache', name)
+        gen = os.path.join(root, 'out', 'site', 'gen')
+        if os.path.isdir(cache):
+            shutil.copytree(cache, gen, dirs_exist_ok=True)
         if audio:
             run([sys.executable, os.path.join(HERE, 'audio.py')], root, env)
         run([sys.executable, os.path.join(HERE, 'gbbolt.py'), 'verify', 'site', '--strict'], root, env)
+        if os.path.isdir(gen):
+            shutil.copytree(gen, cache, dirs_exist_ok=True)
         dest = os.path.join(site, g['id'])
         if os.path.exists(dest):
             shutil.rmtree(dest)

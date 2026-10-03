@@ -4,3 +4,4 @@ _site/
 games/
 *.gb
 *.gbc
+.gencache/
