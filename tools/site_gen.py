@@ -271,6 +271,45 @@ def collect_assets(project):
 
 
 # What each sound is, from where the game requests it (see the annotated callers)
+DMG = [(0xE0, 0xF8, 0xD0), (0x88, 0xC0, 0x70), (0x34, 0x68, 0x56), (0x08, 0x18, 0x20)]
+
+
+def write_png(path, width, height, rgb_rows):
+    """A plain RGB PNG (no dependencies)."""
+    import struct
+    import zlib
+
+    def chunk(kind, data):
+        return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xFFFFFFFF)
+    raw = b''.join(b'\x00' + bytes(row) for row in rgb_rows)
+    png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0))
+    png += chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b'')
+    open(path, 'wb').write(png)
+
+
+def write_thumbnail(assets, tilesets, path, scale=2):
+    """The tilemap asset named in game.json "thumbnail" as a PNG in DMG colours (for the hub)."""
+    name = build.GAME.get('thumbnail')
+    a = next((x for x in assets if x['name'] == name and x['type'] == 'tilemap'), None)
+    if not a or a.get('tileset') not in tilesets:
+        return False
+    tmap = base64.b64decode(a['bytes'])
+    tiles = base64.b64decode(tilesets[a['tileset']])
+    w, h = int(a['params'].get('width', 20)), int(a['params'].get('height', 18))
+    rows = []
+    for py in range(h * 8):
+        row = []
+        for px in range(w * 8):
+            off = tmap[(py // 8) * w + px // 8] * 16 + (py % 8) * 2
+            lo, hi = tiles[off], tiles[off + 1]
+            bit = 7 - px % 8
+            row.extend(DMG[((hi >> bit) & 1) << 1 | ((lo >> bit) & 1)] * scale)
+        for _ in range(scale):
+            rows.append([c for rgb in zip(row[0::3], row[1::3], row[2::3]) for c in rgb])
+    write_png(path, w * 8 * scale, h * 8 * scale, rows)
+    return True
+
+
 def other_games():
     """The games of the hub this site is built for ($GBBOLT_GAMES: a games.json), for
     the selector in the viewer's header. Empty for a site built on its own."""
@@ -402,7 +441,10 @@ def generate(project):
     open(path, 'w', encoding='utf-8', newline='\n').write(html)
     # a short summary for the hub page that lists all games
     funcs = [u for u in units if u['k'] == 'code']
+    thumb = write_thumbnail(assets, tilesets, os.path.join(OUT_DIR, 'thumb.png'))
     summary = {'id': build.GAME.get('id'), 'title': data['title'], 'sha1': data['build']['sha1'],
+               'thumbnail': 'thumb.png' if thumb else None,
+               'publisher': build.GAME.get('publisher'), 'year': build.GAME.get('year'),
                'functions': len(funcs), 'annotated': sum(1 for u in funcs if u.get('def')),
                'verified': sum(1 for u in funcs if u.get('st') == 'verified'),
                'checked': sum(1 for u in funcs if u.get('st') == 'checked'),
