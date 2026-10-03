@@ -98,7 +98,7 @@ def setup_namespace(data, rng, env):
             cpu.sp = cfg['stack']
             cpu.call(env.syms[cfg['update']])
 
-    ns.update(rand_ram=rand_ram, rand_bcd=rand_bcd, fill_bcd=fill_bcd, rand=rand, play=play)
+    ns.update(to_bcd=lambda n: int(str(n), 16), rand_ram=rand_ram, rand_bcd=rand_bcd, fill_bcd=fill_bcd, rand=rand, play=play)
     return ns
 
 

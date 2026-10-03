@@ -1,7 +1,7 @@
 """Helpers for reworking the pseudo-code <-> assembly grouping.
 
     python tools/regroup.py extract NAME... > block.asm   # units as apply.py takes them
-    python tools/regroup.py check block.asm               # only ;> / ;= lines differ?
+    python tools/regroup.py check block.asm               # only ;> / ;= / ;@ lines differ?
     python tools/regroup.py stats [NAME...]                # biggest group per unit
 
 `check` compares every unit in the block with the source, ignoring `;>` and
@@ -17,17 +17,24 @@ import build  # noqa: E402
 
 def source_units():
     out = {}
-    text = '\n'.join(open(os.path.join(build.SRC, f), encoding='utf-8').read() for f in build.asm_files())
-    for name, body in apply.split_units(text):
-        while body and not body[-1].strip():
-            body.pop()
-        out[name] = body
+    for f in build.asm_files():
+        text = open(os.path.join(build.SRC, f), encoding='utf-8').read()
+        for k, (name, body) in enumerate(apply.split_units(text)):
+            if k == 0:              # the file's header before its first unit belongs to no unit
+                label = next(i for i, l in enumerate(body) if apply.LABEL.match(l))
+                start = label
+                while start and body[start - 1].startswith(';@'):
+                    start -= 1
+                body = body[start:]
+            while body and not body[-1].strip():
+                body.pop()
+            out[name] = body
     return out
 
 
 def is_annotation(line):
     s = line.strip()
-    return s.startswith(';>') or s.startswith(';=')
+    return s.startswith(';>') or s.startswith(';=') or s.startswith(';@')
 
 
 def essence(body):

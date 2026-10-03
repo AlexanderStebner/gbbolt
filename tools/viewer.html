@@ -1324,12 +1324,14 @@ function drawTiles(a, el, size) {
     };
   }
 }
+// BG tile number -> offset in the $8000-$97FF tile data (LCDC bit 4: '8800' = signed around $9000)
+const tileOffset = (a, t) => ((a.params.addressing === '8800' && t < 128) ? t + 256 : t) * 16;
 function drawTilemap(a, el, size) {
   const map = b64(a.bytes), W = +(a.params.width || 20), H = +(a.params.height || 18);
   const ts = tileset(a.tileset) || new Uint8Array(0x1800);
   const c = makeCanvas(W * 8, H * 8, size === 'large' ? 3 : 0), ctx = c.getContext('2d');
   const img = ctx.createImageData(c.width, c.height);
-  for (let i = 0; i < W * H; i++) blitTile(img, c.width, (i % W) * 8, Math.floor(i / W) * 8, ts, map[i] * 16, 2);
+  for (let i = 0; i < W * H; i++) blitTile(img, c.width, (i % W) * 8, Math.floor(i / W) * 8, ts, tileOffset(a, map[i]), 2);
   ctx.putImageData(img, 0, 0);
   el.appendChild(c);
   if (size === 'large') {
@@ -1457,8 +1459,17 @@ function drawSprites(a, el, size) {
   el.appendChild(grid);
   tipLine(el, `each sprite drawn by running the game's ${G.sprites ? esc(G.sprites) : 'sprite'} routine in the SM83 emulator; checkerboard = transparent`);
 }
-const RENDERERS = {tiles: drawTiles, tilemap: drawTilemap, logo: drawLogo, header: drawHeader, sprites: drawSprites};
-const TYPE_TEXT = {tiles: 'tile sheets', tilemap: 'tilemaps', logo: 'logo', header: 'cartridge header', sprites: 'sprites'};
+function drawOAM(a, el, size) {
+  // a sprite layout stored as ready-made OAM entries (y, x, tile, attributes), copied into the shadow OAM as is
+  const ts = tileset(a.tileset) || new Uint8Array(0x1800), e = a.sprites[0] || [];
+  const holder = document.createElement('div');
+  holder.style.cssText = 'display:inline-flex;padding:8px;border-radius:8px;border:1px solid var(--border);background:repeating-conic-gradient(var(--panel) 0 25%, var(--panel2) 0 50%) 0 0/12px 12px';
+  holder.appendChild(spriteCanvas(e, ts, size === 'large' ? 4 : 2));
+  el.appendChild(holder);
+  if (size === 'large') tipLine(el, `${e.length} OAM entries (y, x, tile, attributes) copied straight into the shadow OAM · tile data from running ${a.tileset} · checkerboard = transparent`);
+}
+const RENDERERS = {tiles: drawTiles, tilemap: drawTilemap, logo: drawLogo, header: drawHeader, sprites: drawSprites, oam: drawOAM};
+const TYPE_TEXT = {tiles: 'tile sheets', tilemap: 'tilemaps', logo: 'logo', header: 'cartridge header', sprites: 'sprites', oam: 'sprite layouts'};
 function drawAsset(a, el, size) {
   if (a.error) { el.innerHTML = `<span class="badv">${esc(a.error)}</span>`; return; }
   const f = RENDERERS[a.type];
@@ -1565,7 +1576,7 @@ function renderAssets(sel) {
   } else {
     const groups = {};
     (D.assets || []).forEach(a => (groups[a.type] = groups[a.type] || []).push(a));
-    const order = ['header', 'logo', 'sprites', 'tilemap', 'tiles'].filter(t => groups[t]).concat(Object.keys(groups).filter(t => !RENDERERS[t]));
+    const order = ['header', 'logo', 'sprites', 'oam', 'tilemap', 'tiles'].filter(t => groups[t]).concat(Object.keys(groups).filter(t => !RENDERERS[t]));
     const kindText = (D.audio && D.audio.kinds) || {};
     const audio = (D.audio && D.audio.items) || [];
     const sections = order.map(type => ({key: type, label: TYPE_TEXT[type] || type, count: groups[type].length,

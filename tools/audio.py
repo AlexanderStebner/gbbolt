@@ -470,8 +470,9 @@ class Timeline:
                 continue
             prev = self.last_list[i]
             pat = eng.word(base + mc['pattern_ptr'])
-            # a pattern list entry that loops onto itself: the pattern pointer jumps back
-            restart = lst == prev and pat < self.last_pat[i]
+            # a pattern list entry that loops onto itself: the pattern pointer jumps back to the
+            # start of the pattern (a repeat inside a pattern, $9B..$9C in some engines, does not count)
+            restart = lst == prev and pat < self.last_pat[i] and pat == eng.word(lst)
             if lst != prev or restart:
                 if prev is not None and (lst < prev or restart) and self.loop is None:
                     # the song repeats once every channel has looped (a drum part may loop early)

@@ -37,6 +37,8 @@ def main():
     syms = build.read_sym()
     cfg = json.load(open(os.path.join(build.SRC, 'sound.json'), encoding='utf-8'))
     sd = cfg['song_data']
+    # pattern commands and their length in bytes (default: the Tetris engine's $9D instrument + 3 bytes)
+    cmd_len = {int(k, 16): v for k, v in sd.get('commands', {'9D': 4}).items() if not k.startswith('_')}
     names = cfg.get('names', {})
     w = lambda a: rom[a] | rom[a + 1] << 8   # noqa: E731
     table, count = syms[sd['table']], sd['count']
@@ -61,6 +63,20 @@ def main():
             lst = w(h + 3 + 2 * c)
             if lst:
                 list_starts.setdefault(lst, (s, c))
+    # patterns named by lists that end properly: a list without an end marker that runs
+    # into one of these stops there (its bytes are that pattern, not more entries)
+    known_patterns = set()
+    for lst in list_starts:
+        a, entries = lst, []
+        while a not in list_starts or a == lst:
+            p = w(a)
+            if p >> 8 in (0, 0xFF):
+                known_patterns.update(entries)
+                break
+            if not start <= p < end:
+                break
+            entries.append(p)
+            a += 2
     runs_on = {}                                         # list -> the label it runs into
     for s, h in enumerate(heads, 1):
         pat_no = sum(1 for a in structs if structs[a][0] == 'pattern' and structs[a][2] == s)
@@ -71,7 +87,7 @@ def main():
             claim(lst, 'Song{:02X}{}'.format(s, CH[c]), 'list', None, s)
             a = lst
             while True:
-                if a != lst and (a in list_starts or a in structs):
+                if a != lst and (a in list_starts or a in structs or a in known_patterns):
                     runs_on[lst] = a                     # no end marker: continues into the next list
                     break
                 p = w(a)
@@ -99,7 +115,7 @@ def main():
     for a in sorted(x for x in structs if structs[x][0] == 'pattern'):
         p = a
         while rom[p] != 0 and p not in others:
-            p += 4 if rom[p] == 0x9D else 1
+            p += cmd_len.get(rom[p], 1)
         if p in others:                                  # no $00: the bytes after it are another list
             runs_on[a] = p
             structs[a] = ('pattern', p - a, structs[a][2])
@@ -117,7 +133,7 @@ def main():
     for a, (kind, size, s) in structs.items():
         for b in range(a, a + size):
             if b in covered and covered[b] != a:
-                sys.exit('structures overlap at ${:04X}'.format(b))
+                sys.exit('structures overlap at ${:04X}: {} ${:04X} and {} ${:04X}'.format(b, structs[covered[b]][0], covered[b], kind, a))
             covered[b] = a
     if max(covered) >= end:
         sys.exit('song data runs past the region end')

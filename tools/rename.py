@@ -43,7 +43,10 @@ def main():
     if len(sys.argv) < 3:
         sys.exit(__doc__)
     old, new = sys.argv[1], sys.argv[2]
-    backup = {p: open(p, encoding='utf-8').read() for p in src_files()}
+    if not old.startswith('$') and len(old) < 4:
+        # a whole-word replace of a short name would also hit comments and pseudo-code variables
+        sys.exit('refusing to rename the short name {!r}: rename it by hand'.format(old))
+    backup ={p: open(p, encoding='utf-8').read() for p in src_files()}
     is_addr = old.startswith('$')
     alias = is_addr and '+' in new   # e.g. 'hBGMapAddr + 1': no new DEF
     if is_addr:

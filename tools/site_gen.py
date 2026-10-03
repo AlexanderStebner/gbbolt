@@ -167,22 +167,24 @@ def resolve_value(project, v):
 def run_loader(project, spec):
     """Run a tile-loading routine in the SM83 interpreter; return VRAM tile data ($8000-$97FF).
 
-    spec: 'Routine' or 'Routine(hl=Label,bc=$1000)'.
+    spec: 'Routine' or 'Routine(hl=Label,bc=$1000)'; several joined with '+' run one
+    after the other on the same VRAM (a base tileset, then what a screen loads over it).
     """
-    m = re.match(r'^(\w+)(?:\((.*)\))?$', spec)
-    name, args = m.group(1), m.group(2) or ''
     mem = bytearray(0x10000)
     mem[0:0x8000] = project.rom[0:0x8000]
-    cpu = CPU(mem)
-    for arg in filter(None, args.split(',')):
-        reg, _, val = arg.partition('=')
-        v = resolve_value(project, val)
-        if len(reg) == 2:
-            cpu.setp(reg, v)
-        else:
-            setattr(cpu, reg, v & 0xFF)
-    cpu.sp = build.GAME['test_memory']['stack_top']
-    cpu.call(project.syms[name], max_steps=2000000)
+    for step in spec.split('+'):
+        m = re.match(r'^(\w+)(?:\((.*)\))?$', step)
+        name, args = m.group(1), m.group(2) or ''
+        cpu = CPU(mem)
+        for arg in filter(None, args.split(',')):
+            reg, _, val = arg.partition('=')
+            v = resolve_value(project, val)
+            if len(reg) == 2:
+                cpu.setp(reg, v)
+            else:
+                setattr(cpu, reg, v & 0xFF)
+        cpu.sp = build.GAME['test_memory']['stack_top']
+        cpu.call(project.syms[name], max_steps=2000000)
     return bytes(mem[0x8000:0x9800])
 
 
@@ -242,6 +244,8 @@ def collect_assets(project):
         if not a:
             continue
         params = {k: v for k, v in a.items() if k not in ('type', 'doc')}
+        if a['type'] in ('tilemap', 'rows'):     # BG tile numbers: 8000 = unsigned from $8000, 8800 = signed around $9000 (LCDC bit 4)
+            params.setdefault('addressing', str(build.GAME.get('tile_addressing', '8000')))
         if 'range' in params:
             lo, hi = params['range'].split('-')
             start, end = resolve_value(project, lo), resolve_value(project, hi) + 1
@@ -250,10 +254,28 @@ def collect_assets(project):
             end = start + (resolve_value(project, params['length']) if 'length' in params else u.end - u.start)
             if a['type'] == 'tilemap' and 'length' not in params:
                 end = start + int(params.get('width', 20)) * int(params.get('height', 18))
+            if a['type'] == 'oam' and 'length' not in params:    # (y, x, tile, attr) entries copied up to an end byte
+                stop = resolve_value(project, params.get('end', '$FD'))
+                end = rom.index(stop, start) + 1     # the copy loops stop at that byte anywhere
+            if a['type'] == 'rows' and 'length' not in params:   # tile rows split by a newline byte, up to an end byte
+                end = rom.index(resolve_value(project, params.get('end', '$FD')), start) + 1
         item = {'name': u.name, 'type': a['type'], 'params': params, 'doc': a['doc'],
                 'start': start, 'length': end - start,
                 'bytes': base64.b64encode(bytes(rom[start:end])).decode(),
                 'users': sorted(users.get(u.start, ()))}
+        if a['type'] == 'rows':          # shown as a small tilemap: one row per line, padded with the blank tile
+            data, blank = bytes(rom[start:end - 1]), resolve_value(project, params.get('blank', '$FE'))
+            if 'newline' in params:
+                rows = [list(r) for r in data.split(bytes([resolve_value(project, params['newline'])]))]
+            else:                         # fixed-width rows (the whole run as one row without a width)
+                n = int(params.get('width', 0)) or len(data)
+                rows = [list(data[i:i + n]) for i in range(0, len(data), n)]
+            width = int(params.get('width', 0)) or max(len(r) for r in rows)
+            grid = [r + [blank] * (width - len(r)) for r in rows]
+            item['type'] = 'tilemap'
+            item['params'] = dict(params, width=str(width), height=str(len(grid)))
+            item['bytes'] = base64.b64encode(bytes(sum(grid, []))).decode()
+            item['length'] = end - start
         if 'tiles' in params:
             keys = params['tiles'].split('|')
             for key in keys:
@@ -264,6 +286,9 @@ def collect_assets(project):
                         item['error'] = 'could not run {}: {}'.format(key, e)
             item['tileset'] = keys[0]
             item['tilesets'] = keys
+        if a['type'] == 'oam':
+            raw = rom[start:end] if 'length' in params else rom[start:end - 1]    # without the end byte
+            item['sprites'] = [[list(raw[i:i + 4]) for i in range(0, len(raw) - 3, 4)]]
         if a['type'] == 'sprites':
             item['sprites'] = render_sprites(project, resolve_value(project, params.get('count', '1')))
         assets.append(item)
@@ -296,11 +321,13 @@ def write_thumbnail(assets, tilesets, path, scale=2):
     tmap = base64.b64decode(a['bytes'])
     tiles = base64.b64decode(tilesets[a['tileset']])
     w, h = int(a['params'].get('width', 20)), int(a['params'].get('height', 18))
+    signed = a['params'].get('addressing') == '8800'
     rows = []
     for py in range(h * 8):
         row = []
         for px in range(w * 8):
-            off = tmap[(py // 8) * w + px // 8] * 16 + (py % 8) * 2
+            tile = tmap[(py // 8) * w + px // 8]
+            off = (tile + 256 if signed and tile < 128 else tile) * 16 + (py % 8) * 2
             lo, hi = tiles[off], tiles[off + 1]
             bit = 7 - px % 8
             row.extend(DMG[((hi >> bit) & 1) << 1 | ((lo >> bit) & 1)] * scale)
