@@ -421,7 +421,8 @@ class Env:
         g.update(self.consts)
         for name, a in self.syms.items():
             if '.' not in name:
-                g.setdefault(name, a)
+                # a number in arithmetic; calling it (code not modelled yet) says so instead of crashing
+                g.setdefault(name, self.stub(name) if name not in self.vars else a)
 
         def resolve(target):
             return g.get(target) if callable(g.get(target)) else self.stub(target)

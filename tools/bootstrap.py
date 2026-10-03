@@ -2,10 +2,10 @@
 
     python tools/bootstrap.py [--force]
 
-Runs tools/trace.py to produce tetris.sym (code/data map), then mgbdis
-(from ../mgbdis) with the vector labels it normally hard-codes removed - the
+Runs tools/trace.py to produce <rom>.sym (code/data map), then mgbdis
+(from ../mgbdis next to the project, or $GBBOLT_MGBDIS) with the vector labels it normally hard-codes removed - the
 tracer knows where code really is, and mgbdis' fixed 8-byte vector blocks
-would cut Tetris' serial handler in half.
+would cut code that runs on past a vector in half (Tetris' serial handler).
 
 src/ is hand-edited after this, so the script refuses to overwrite it.
 """
@@ -14,15 +14,16 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-MGBDIS = os.path.join(ROOT, '..', 'mgbdis', 'mgbdis.py')
 sys.path.insert(0, HERE)
 import build  # noqa: E402
+ROOT = build.ROOT                                   # the game's project folder (with game.json)
+MGBDIS = os.environ.get('GBBOLT_MGBDIS') or os.path.join(ROOT, '..', 'mgbdis', 'mgbdis.py')
 ROM = build.BASEROM
-SRC = os.path.join(ROOT, 'src')
+SRC = build.SRC
 
 
 def main():
+    os.makedirs(SRC, exist_ok=True)
     if os.path.exists(os.path.join(SRC, 'bank_000.asm')) and '--force' not in sys.argv:
         sys.exit('src/ already exists and is hand-edited; pass --force to regenerate it')
     subprocess.check_call([sys.executable, os.path.join(HERE, 'trace.py'), ROM])
