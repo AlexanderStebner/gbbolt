@@ -10,5 +10,11 @@
     "title": "Dr. Mario",
     "repo": "AlexanderStebner/drmario-gbbolt",
     "description": "Viruses, capsules and chain reactions; the 2-player link mode with its danger music, the underwater cutscenes and the title demo, all played by the game's own code."
+  },
+  {
+    "id": "kwirk",
+    "title": "Kwirk",
+    "repo": "AlexanderStebner/kwirk-gbbolt",
+    "description": "The tomato's puzzle rooms: all 150 rooms drawn by the game itself, blocks, holes and turnstiles, random courses, the 2-player link mode and the endings at Kwirk's house."
   }
 ]
