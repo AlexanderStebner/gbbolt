@@ -42,6 +42,7 @@ import build  # noqa: E402
 # Bump when engine changes alter what plugins produce (the runner, the audio renderer):
 # plugins are rebuilt only when this, the plugin, its helpers (_*.py) or the ROM change.
 ASSET_ENGINE_VERSION = 2
+FRAME_HZ = 4194304 / 70224        # the Game Boy's frame rate (59.73)
 
 
 class AssetContext:
@@ -77,10 +78,23 @@ class AssetContext:
         self.files.append(fn)
         return os.path.join(self.gen_dir, fn), 'gen/' + fn
 
-    def video(self, frames, name, fps=60, scale=3, audio=None, audio_start=0.0):
+    def video(self, frames, name, fps=FRAME_HZ, scale=3, audio=None, audio_start=0.0, sound=None):
+        """An MP4 of the frames. audio: a sound file to put under it; sound: a GameRunner
+        that recorded the game's own sound register writes (record_sound) - rendered here."""
         from gamerun import write_video
         path, url = self.file(name + '.mp4')
-        write_video(frames, path, fps=fps, scale=scale, audio=audio, audio_start=audio_start)
+        tmp = None
+        if sound is not None and sound.sound:
+            import audio as A
+            cfg = A.load_config()
+            tmp = path[:-4] + '.wav'
+            A.write_wav(A.render_writes(sound.sound, fps, cfg['power_on']), tmp)
+            audio, audio_start = tmp, 0.0
+        try:
+            write_video(frames, path, fps=fps, scale=scale, audio=audio, audio_start=audio_start)
+        finally:
+            if tmp and os.path.exists(tmp):
+                os.remove(tmp)
         return url
 
     def poster(self, frame, name):

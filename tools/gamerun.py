@@ -35,6 +35,17 @@ class GameRunner:
         # the LCD as busy-wait loops want to see it: in VBlank at line $91, in HBlank (mode 0)
         self.mem[0xFF44] = 0x91
         self.mem[0xFF41] = 0x00
+        self.sound = None                          # list of per-frame sound register writes, when recording
+
+    def record_sound(self):
+        """From now on collect the sound register writes, frame by frame (see end_frame)."""
+        self.sound, self._pending = [], []
+
+    def end_frame(self):
+        """Close the current frame (for the sound recording)."""
+        if self.sound is not None:
+            self.sound.append(self._pending)
+            self._pending = []
 
     # ---- memory by name
     def addr(self, name):
@@ -68,7 +79,12 @@ class GameRunner:
         cpu.reads, cpu.writes = set(), set()       # the interpreter's own bookkeeping, not needed here
         cpu.rom_writes = []
         self.mem[0xFF44] = 0x91
+        if self.sound is not None:
+            cpu.io_log = []
         steps = cpu.call(self.addr(name), max_steps=max_steps)
+        if self.sound is not None:
+            self._pending += cpu.io_log
+            cpu.io_log = None
         if 0xFF46 in cpu.writes:                   # OAM DMA: 160 bytes from page [$FF46] to OAM
             src = self.mem[0xFF46] << 8
             self.mem[0xFE00:0xFEA0] = self.mem[src:src + 0xA0]

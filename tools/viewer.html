@@ -509,7 +509,8 @@ function hl(text, lang) {
     else if (m[4]) {
       let w = m[4], tail = '';
       if (lang === 'asm' && /[+-]$/.test(w) && w.length > 1) { tail = w.slice(-1); w = w.slice(0, -1); }
-      out += ident(w, lang, first) + esc(tail); first = false;
+      const prose = lang === 'doc' && D.helpers[w] !== undefined && text[re.lastIndex] !== '(';   // "all", "list" in a sentence
+      out += (prose ? esc(w) : ident(w, lang, first)) + esc(tail); first = false;
     }
     else out += esc(m[0]);
   }
@@ -1562,14 +1563,16 @@ function drawChart(a, el, size) {
   const bar = a.kind === 'bar';
   let x0 = Math.min(...xs), x1 = Math.max(...xs);
   if (bar) { x0 -= 0.5; x1 += 0.5; }
-  const y0 = Math.min(0, ...ys), y1 = Math.max(...ys) * 1.08 || 1;
+  const y0 = Math.min(0, ...ys), ymax = Math.max(...ys) || 1;
+  const step = (() => { const r = (ymax - y0) / 4, p = 10 ** Math.floor(Math.log10(r)); return [1, 2, 2.5, 5, 10].map(m => m * p).find(v => v >= r); })();
+  const y1 = Math.max(ymax * 1.04, y0 + step * Math.ceil((ymax - y0) / step));
   const X = x => pad.l + (x - x0) / ((x1 - x0) || 1) * (W - pad.l - pad.r);
   const Y = y => H - pad.b - (y - y0) / ((y1 - y0) || 1) * (H - pad.t - pad.b);
   const colors = ['var(--accent)', '#e08a2a', '#9b59b6', '#2a9d8f', '#d33'];
   let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:100%;height:auto;font:11px var(--mono)">`;
   if (big) {
-    for (let k = 0; k <= 4; k++) {
-      const yv = y0 + (y1 - y0) * k / 4, y = Y(yv);
+    for (let yv = y0; yv <= y1 + 1e-9; yv += step) {
+      const y = Y(yv);
       s += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}" stroke="var(--border)"/><text x="${pad.l - 6}" y="${y + 4}" text-anchor="end" fill="var(--muted)">${+yv.toFixed(yv < 10 ? 1 : 0)}</text>`;
     }
     const ticks = a.xticks || [...new Set(xs)].filter((_, i, arr) => arr.length < 25 || i % Math.ceil(arr.length / 20) === 0).map(x => [x, x]);

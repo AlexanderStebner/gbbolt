@@ -552,6 +552,35 @@ def render(rom, syms, cfg, kind, number, pokes=None, hz=None, max_seconds=None, 
     return pcm(mix), [pcm(s) for s in stems], timeline, count / FRAME_HZ, loop
 
 
+def render_writes(frames, fps, power_on=()):
+    """Stereo int16 PCM from sound register writes grouped by frame (what a game wrote
+    while running in gamerun.GameRunner), played at fps frames a second."""
+    apu = APU()
+    for a, v in power_on:
+        apu.write(a, v)
+    left, right = [], []
+    acc = 0.0
+    for writes in frames:
+        for a, v in writes:
+            apu.write(a, v)
+        acc += RATE / fps
+        n = int(acc)
+        acc -= n
+        chans = apu.render(n)
+        left.append(sum(c[0] for c in chans))
+        right.append(sum(c[1] for c in chans))
+    mix = np.stack([highpass(np.concatenate(left)), highpass(np.concatenate(right))], axis=1)
+    return np.clip(mix * 0.45 * 32767, -32768, 32767).astype(np.int16)
+
+
+def write_wav(pcm, path):
+    with wave.open(path, 'wb') as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(RATE)
+        w.writeframes(pcm.tobytes())
+
+
 def write_mp3(pcm, path, quality=3):
     wav = path[:-4] + '.wav'
     with wave.open(wav, 'wb') as w:
