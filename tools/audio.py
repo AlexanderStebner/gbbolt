@@ -551,6 +551,9 @@ def write_mp3(pcm, path, quality=3):
 
 
 def main():
+    ok, msg = build.build()                      # render what the source builds to (also on a fresh clone)
+    if not ok:
+        sys.exit(msg)
     rom = open(build.BUILT, 'rb').read()
     syms = build.read_sym()
     cfg = load_config()
