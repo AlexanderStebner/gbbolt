@@ -105,9 +105,11 @@ class AssetContext:
         return base64.b64encode(b''.join(bytes(r) for r in rows)).decode()
 
 
-def _key(project, src):
+def _key(project, src, plugin_dir):
     h = hashlib.sha1(bytes(project.rom))
     h.update(src.encode())
+    for f in sorted(glob.glob(os.path.join(plugin_dir, '_*.py'))):     # shared helpers of the plugins
+        h.update(open(f, 'rb').read())
     for f in ENGINE_FILES:
         h.update(open(os.path.join(HERE, f), 'rb').read())
     return h.hexdigest()
@@ -127,7 +129,7 @@ def collect(project, site_dir):
         if name.startswith('_'):
             continue
         src = open(path, encoding='utf-8').read()
-        key = _key(project, src)
+        key = _key(project, src, plugin_dir)
         cache = os.path.join(gen_dir, name + '.json')
         if os.path.exists(cache):
             c = json.load(open(cache, encoding='utf-8'))
