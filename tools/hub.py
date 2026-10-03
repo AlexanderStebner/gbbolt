@@ -48,7 +48,8 @@ PAGE = '''<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>gbbolt</title>
-<meta name="description" content="Game Boy games, read like source code: matching disassemblies with checked pseudo-code">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6b4f'/%3E%3Ctext x='16' y='23' font-family='Consolas,Menlo,monospace' font-size='23' font-weight='700' fill='%23e0f8d0' text-anchor='middle'%3Eg%3C/text%3E%3C/svg%3E">
+<meta name="description" content="Complete Game Boy decompilations: matching disassemblies with diff-tested pseudo-code side by side, and the games' assets">
 <style>
 :root {
   --bg: #f4f6f3; --panel: #ffffff; --panel2: #eef2ec; --border: #d8ded5; --text: #18211c; --muted: #5b675f;
@@ -77,6 +78,7 @@ a { color: var(--accent); text-decoration: none; }
 
 /* top bar */
 .top { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+.lead { max-width: 760px; font-size: 15.5px; line-height: 1.55; color: var(--text); opacity: .85; margin: 0 0 18px; }
 .logo { display: flex; align-items: center; gap: 10px; font: 700 18px var(--sans); color: var(--text); letter-spacing: -.01em; }
 .logo i { width: 26px; height: 26px; border-radius: 7px; background: var(--accent); display: grid; place-items: center; font: 700 15px var(--mono); color: var(--screen); font-style: normal; }
 .top a.gh { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
@@ -149,11 +151,14 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: s
       <span class="logo"><i>g</i>gbbolt</span>
       <a class="gh" href="https://github.com/{engine}">{github} GitHub</a>
     </div>
-    <h1>Game Boy games, <em>read like source code.</em></h1>
+    <h1>Complete Game Boy decompilations, <em>side by side with the assembly.</em></h1>
+    <p class="lead">Every function has Python pseudo-code next to its SM83 assembly, linked line by line, Compiler Explorer style. The source rebuilds the original ROM byte for byte; the pseudo-code is executable and diff-tested against the original code in an emulator; graphics, maps, sprites, music and sound are extracted by running the game's own routines.</p>
     <div class="chips">
-      <span class="chip"><b>Matching</b> rebuilds the ROM byte for byte</span>
-      <span class="chip"><b>Checked</b> pseudo-code verified in an emulator</span>
-      <span class="chip"><b>Complete</b> graphics, music and sound</span>
+      <span class="chip"><b>100%</b> of functions decompiled</span>
+      <span class="chip"><b>1:1</b> matching ROM rebuild</span>
+      <span class="chip"><b>diff-tested</b> pseudo-code</span>
+      <span class="chip"><b>named</b> every label and RAM byte</span>
+      <span class="chip"><b>assets</b> tiles · maps · sprites · music · replays</span>
     </div>
   </div>
 </header>

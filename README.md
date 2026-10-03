@@ -7,7 +7,7 @@ a Godbolt-style viewer generated from them.
 
 The assembly stays the source of truth: annotations are ordinary asm comments, so
 RGBDS ignores them and the ROM still rebuilds byte for byte. The tools read the
-comments, check the pseudo-code against the real code in an SM83 emulator, and render
+comments, check the pseudo-code against the real code in an emulator, and render
 the result: code and pseudo-code side by side, a book, call graph, RAM map, the game's
 graphics, and its music as a piano roll with mute / solo per channel.
 
@@ -136,8 +136,8 @@ TitleScreenTilemap::
 | `oam` | `tiles=...`, `end=$FD` or `length=` | a sprite layout stored as ready-made OAM entries |
 | `rows` | `tiles=...`, `width=` or `newline=`, `blank=` | a string of tiles (messages, text panels) |
 
-For tilemaps, `tiles=` names the game's own tile-loading routine. The generator runs it in the SM83
-interpreter (with the given registers) and uses the VRAM it leaves behind, so no tile layout has to be
+For tilemaps, `tiles=` names the game's own tile-loading routine. The generator runs it
+ (with the given registers) and uses the VRAM it leaves behind, so no tile layout has to be
 described by hand. Several loaders can be chained with `+` (a base tile set, then what a screen loads
 over it). `game.json` → `tile_addressing: "8800"` for games whose BG uses the signed tile numbers.
 
@@ -160,7 +160,7 @@ What the tools need to know about a particular game lives in its project, not in
 
 | file | what |
 |---|---|
-| `game.json` | id, ROM file and its SHA1, title (default: from the cartridge header), main asm file, rgblink / rgbfix flags, the function the Code view opens with and the call graph's default focus, the `rst` jump-table convention (if the game has one), extra entry points for the tracer, the memory the differential tests may use, how to draw a sprite with the game's own routine |
+| `game.json` | id, ROM file and its SHA1, title (default: from the cartridge header), main asm file, rgblink / rgbfix flags, the function the Code view opens with (`start`; default `MainLoop`, else the first function), the entry point and the call graph's default focus, the `rst` jump-table convention (if the game has one), extra entry points for the tracer, the memory the differential tests may use, how to draw a sprite with the game's own routine |
 | `src/folders.txt` | the virtual folders and their descriptions |
 | `src/sound.json` | how to drive the sound engine (below) |
 | `src/ram.inc` | RAM names, types and descriptions |
@@ -172,7 +172,7 @@ yet: bank switching (games bigger than 32 KB).
 
 ## Sound and the Music view
 
-`tools/audio.py` runs the game's own sound engine in the SM83 emulator (init once, the
+`tools/audio.py` runs the game's own sound engine (init once, the
 request, then the update routine once per frame) and feeds every sound register write
 into an APU model. Per sound it writes the mix, one file per channel (for mute / solo)
 and a timeline: the notes of each channel with frequency and volume frame by frame,
@@ -198,7 +198,7 @@ disassembly.
 | ROM matches | rebuild with RGBDS, compare the SHA1 with the original |
 | names | every name in the pseudo-code must resolve (variable, label, helper, parameter) |
 | header | declared parameters / clobbers / reads / writes vs. what the code really touches (static scan + observed during tests) |
-| differential test | 64 random machine states: the original code runs in an SM83 interpreter (`tools/sm83.py`), the pseudo-code in Python; all memory and the declared return registers must be identical |
+| differential test | 64 random machine states: the original code runs on the tools' Game Boy CPU interpreter (`tools/sm83.py`), the pseudo-code in Python; all memory and the declared return registers must be identical |
 | staleness | `;@ sig:` is a CRC of the function's bytes; it shows up as stale if they change |
 
 Status per function: **verified** (differential test passed), **checked** (names and header OK, not runnable:

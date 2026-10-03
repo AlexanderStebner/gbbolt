@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>gbbolt</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6b4f'/%3E%3Ctext x='16' y='23' font-family='Consolas,Menlo,monospace' font-size='23' font-weight='700' fill='%23e0f8d0' text-anchor='middle'%3Eg%3C/text%3E%3C/svg%3E">
 <style>
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --panel2: #f0f2f5; --border: #d9dde4; --text: #1d2330; --muted: #5d6678;
@@ -312,16 +313,31 @@ body.focus #sidebar { display: none; }
 body.focus.drawer #sidebar { display: flex; position: fixed; left: 0; top: 0; bottom: 0; z-index: 20; box-shadow: 4px 0 24px rgba(0, 0, 0, .25); }
 #focusname { font: 600 13px var(--mono); color: var(--text); margin-right: 6px; }
 #focusbtn.on { border-color: var(--accent); color: var(--accent); }
+.mobileonly { display: none; }
 @media (max-width: 900px) {
+  /* phones and narrow windows: menus and sidebars become drawers behind ☰ buttons */
+  .mobileonly, .focusonly { display: inline-flex; }
+  header { gap: 8px; }
+  header nav, header #search, header #buildbadge { display: none; }
+  body.navopen header nav { display: flex; flex-direction: column; width: 100%; order: 10; }
+  body.navopen header nav a { padding: 9px 11px; }
+  body.navopen header #search { display: block; width: 100% !important; order: 11; }
   #sidebar { display: none; }
+  body.drawer #sidebar { display: flex; position: fixed; left: 0; top: 0; bottom: 0; z-index: 20; width: min(300px, 86vw); box-shadow: 4px 0 24px rgba(0, 0, 0, .25); }
   #panes { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
   #splitter { display: none; }
   #toc { display: none; }
+  body.tocopen #toc { display: block; position: fixed; left: 0; top: 0; bottom: 0; z-index: 20; width: min(300px, 86vw); box-shadow: 4px 0 24px rgba(0, 0, 0, .25); }
+  #card { max-width: 100vw; box-sizing: border-box; overflow-wrap: anywhere; }
+  #card * { max-width: calc(100vw - 32px); }
+  #tocbtn { position: fixed; left: 12px; bottom: 12px; z-index: 15; box-shadow: 0 2px 10px rgba(0, 0, 0, .2); }
+  .panehead > span:not(.t):not(.seg):not(#focusname):not(#asmrange) { display: none; }
 }
 </style>
 </head>
 <body>
 <header>
+  <button id="navbtn" class="mobileonly" title="menu">☰</button>
   <div class="brand">gbbolt <span id="gametitle"></span></div>
   <nav id="nav">
     <a href="#/code" data-v="code">Code</a>
@@ -368,7 +384,7 @@ body.focus.drawer #sidebar { display: flex; position: fixed; left: 0; top: 0; bo
     </div>
   </section>
   <section class="view" id="v-book">
-    <div id="book"><nav id="toc"></nav><div id="bookbody"></div></div>
+    <div id="book"><nav id="toc"></nav><div id="bookbody"></div><button id="tocbtn" class="mobileonly">☰ chapters</button></div>
   </section>
   <section class="view" id="v-coverage"><div class="scroll" id="coverage"></div></section>
   <section class="view" id="v-graph">
@@ -423,8 +439,10 @@ const ASMREG = new Set([...REG8, ...REG16, 'hli', 'hld', 'nz', 'z', 'nc', 'c', '
 const statusOf = u => u.k === 'data' ? 'data' : (u.st || 'none');
 // facts about the game from game.json (all optional)
 const G = D.game || {};
-const ENTRY = G.entry && U.has(G.entry) ? G.entry : (ANN[0] || D.units[0]).n;           // first function shown
+const ENTRY = G.entry && U.has(G.entry) ? G.entry : (ANN[0] || D.units[0]).n;           // the entry point (graph root fallback)
 const GRAPH_ROOT = G.graphRoot && U.has(G.graphRoot) ? G.graphRoot : ENTRY;              // default graph focus
+// where the Code view opens: game.json "start", else MainLoop (the most fun place to begin), else the first function
+const START = G.start && U.has(G.start) ? G.start : U.has('MainLoop') ? 'MainLoop' : ENTRY;
 // virtual folders (`;@ path:`), in reading order
 const FOLDERS = D.folders || [];
 const FOLDER_DESC = new Map(FOLDERS.map(f => [f.path, f.desc]));
@@ -783,7 +801,7 @@ function codeAndComment(t, lang) {
   return `<span class="tx">${hl(code, lang) || ' '}</span>` + (com ? `<span class="cm k-com">${esc(com)}</span>` : '');
 }
 function renderCode(name) {
-  if (!name || !U.has(name)) name = ENTRY;
+  if (!name || !U.has(name)) name = START;
   const u = U.get(name);
   renderFnList(name);
   const size = u.e - u.s;
@@ -937,6 +955,13 @@ const linker = (function () {
   btn.onclick = () => { on = !on; localStorage.setItem('gbbolt.colors', on ? 'on' : 'off'); apply(on); };
 })();
 
+// narrow screens: the header menu and the book's chapters open as drawers too
+$('#navbtn').onclick = e => { e.stopPropagation(); document.body.classList.toggle('navopen'); };
+$('#tocbtn').onclick = e => { e.stopPropagation(); document.body.classList.toggle('tocopen'); };
+document.addEventListener('click', e => {
+  if (document.body.classList.contains('navopen') && (!e.target.closest('header') || e.target.closest('nav a'))) document.body.classList.remove('navopen');
+  if (document.body.classList.contains('tocopen') && (!e.target.closest('#toc') || e.target.closest('#toc a'))) document.body.classList.remove('tocopen');
+});
 // focus mode: only the two panes; ☰ opens the function tree/list as a drawer
 (function () {
   const set = on => {
@@ -1335,7 +1360,7 @@ function drawTilemap(a, el, size) {
   ctx.putImageData(img, 0, 0);
   el.appendChild(c);
   if (size === 'large') {
-    const tip = tipLine(el, `${W}×${H} tiles · tile data from running ${a.tileset} in the SM83 emulator`);
+    const tip = tipLine(el, `${W}×${H} tiles · tile data loaded by the game's own ${a.tileset}`);
     c.onmousemove = e => {
       const r = c.getBoundingClientRect();
       const x = Math.floor((e.clientX - r.left) / r.width * W), y = Math.floor((e.clientY - r.top) / r.height * H), i = y * W + x;
@@ -1457,7 +1482,7 @@ function drawSprites(a, el, size) {
     grid.appendChild(cell);
   });
   el.appendChild(grid);
-  tipLine(el, `each sprite drawn by running the game's ${G.sprites ? esc(G.sprites) : 'sprite'} routine in the SM83 emulator; checkerboard = transparent`);
+  tipLine(el, `each sprite drawn by the game's own ${G.sprites ? esc(G.sprites) : 'sprite'} routine; checkerboard = transparent`);
 }
 function drawOAM(a, el, size) {
   // a sprite layout stored as ready-made OAM entries (y, x, tile, attributes), copied into the shadow OAM as is
@@ -1526,7 +1551,7 @@ function drawVideo(a, el, size) {
     requestAnimationFrame(paint);
   }
   requestAnimationFrame(paint);
-  tipLine(el, 'frames from running the game\'s own code in the SM83 emulator; the lanes show the buttons held, the red line is now');
+  tipLine(el, 'frames drawn by the game\'s own code; the lanes show the buttons held, the red line is now');
 }
 // line / step / bar charts as SVG
 function drawChart(a, el, size) {
@@ -1688,6 +1713,9 @@ const player = (function () {
   });
   return {stop: () => { if (cur) audio.pause(); cur = null; }};
 })();
+// does switching the palette change any of these assets? (videos are recorded in DMG green, charts have none)
+const PAL_TYPES = new Set(['tiles', 'tilemap', 'sprites', 'oam', 'logo', 'image']);
+const usesPalette = list => list.some(a => PAL_TYPES.has(a.type) || (a.type === 'table' && (a.rows || []).some(r => r.some(c => c && c.image))));
 function renderAssets(sel) {
   player.stop();
   const root = $('#assets');
@@ -1696,9 +1724,9 @@ function renderAssets(sel) {
     const a = ASSETS.get(sel);
     const users = (a.users || []).length ? a.users.map(n => `<a class="chip" href="#/code/${encodeURIComponent(n)}">${esc(n)}</a>`).join(' ') : '<span style="color:var(--muted)">—</span>';
     root.innerHTML = `<p style="margin-top:0"><a href="#/assets">← all assets</a></p>
-      <h1 style="font:600 18px var(--mono);margin:0 0 4px">${esc(a.title || a.name)} <span class="badge">${esc(a.type)}</span></h1>
-      <div style="color:var(--muted);font-size:12.5px;margin-bottom:12px">made by the game's asset plugin ${esc(a.generated)}</div>
-      <div class="adetail"><div><div class="astage" id="astage"></div><div style="margin-top:8px">${a.type === 'image' ? palBtns : ''}</div></div>
+      <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;max-width:1400px"><div><h1 style="font:600 18px var(--mono);margin:0 0 4px">${esc(a.title || a.name)} <span class="badge">${esc(a.type)}</span></h1>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:12px">made by the game's asset plugin ${esc(a.generated)}</div></div><span class="spacer"></span>${usesPalette([a]) ? palBtns : ''}</div>
+      <div class="adetail"><div><div class="astage" id="astage"></div></div>
         <div class="ameta">${(a.doc || []).map(d => `<p style="margin-top:0">${hl(d, 'doc')}</p>`).join('')}
           <table class="kv"><tr><td>code</td><td>${users}</td></tr></table></div></div>`;
     drawAsset(a, $('#astage'), 'large');
@@ -1706,9 +1734,9 @@ function renderAssets(sel) {
     const a = ASSETS.get(sel);
     const users = a.users.length ? a.users.map(n => `<a class="chip" href="#/code/${encodeURIComponent(n)}">${esc(n)}</a>`).join(' ') : '<span style="color:var(--muted)">—</span>';
     root.innerHTML = `<p style="margin-top:0"><a href="#/assets">← all assets</a></p>
-      <h1 style="font:600 18px var(--mono);margin:0 0 4px">${esc(a.name)} <span class="badge">${esc(a.type)}</span></h1>
-      <div style="color:var(--muted);font-size:12.5px;margin-bottom:12px">${hex4(a.start)}–${hex4(a.start + a.length - 1)} · ${a.length} bytes</div>
-      <div class="adetail"><div><div class="astage" id="astage"></div><div style="margin-top:8px">${a.type === 'header' ? '' : palBtns}</div></div>
+      <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;max-width:1400px"><div><h1 style="font:600 18px var(--mono);margin:0 0 4px">${esc(a.name)} <span class="badge">${esc(a.type)}</span></h1>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:12px">${hex4(a.start)}–${hex4(a.start + a.length - 1)} · ${a.length} bytes</div></div><span class="spacer"></span>${usesPalette([a]) ? palBtns : ''}</div>
+      <div class="adetail"><div><div class="astage" id="astage"></div></div>
         <div class="ameta"><p style="margin-top:0">${(a.doc || []).map(d => hl(d, 'doc')).join(' ')}</p>
           <table class="kv">${Object.entries(a.params).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="m">${hl(v, 'doc')}</td></tr>`).join('')}
           <tr><td>data</td><td><a href="#/code/${encodeURIComponent(a.name)}">${esc(a.name)} in the disassembly</a></td></tr>
@@ -1728,7 +1756,7 @@ function renderAssets(sel) {
     const kinds = [...new Set(audio.map(a => a.kind))];
     if (kinds.length) sections.push({key: 'audio', label: 'music & sound', count: audio.length,
       html: `<h3>Music &amp; sound effects (${audio.length})</h3>
-      <p style="color:var(--muted);max-width:1000px;margin-top:0">Recorded from the game's own sound engine: it runs in the SM83 emulator (InitSound, then the request, then UpdateSound once per frame), every write to the sound registers goes into a model of the Game Boy APU, and ffmpeg encodes the result. Songs are rendered once through and loop from their loop point (↻). The <a href="#/music">Music</a> view shows each one as a piano roll with mute / solo per channel.</p>` +
+      <p style="color:var(--muted);max-width:1000px;margin-top:0">Recorded from the game's own sound engine (InitSound, then the request, then UpdateSound at the rate the game runs it), every write to the sound registers goes into a model of the Game Boy APU, and ffmpeg encodes the result. Songs are rendered once through and loop from their loop point (↻). The <a href="#/music">Music</a> view shows each one as a piano roll with mute / solo per channel.</p>` +
       kinds.map(k => `<div style="font-weight:600;margin:14px 0 6px">${kindText[k]}</div><div class="agrid">${audio.filter(a => a.kind === k).map(a =>
         `<div class="acard" style="padding:10px 12px;gap:6px"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-family:var(--mono)">${k} $${a.id.toString(16).toUpperCase().padStart(2, '0')}</b><span style="color:var(--muted);font-size:12px">${a.loop !== null && a.loop !== undefined ? '↻ ' : ''}${a.seconds} s · <a href="#/music/${itemKey(a)}">piano roll →</a></span></div>
          <div style="font-size:13px">${esc(a.name)}</div><div style="color:var(--muted);font-size:12px">requested by ${hl(a.usedBy, 'doc')}</div>
@@ -1736,8 +1764,8 @@ function renderAssets(sel) {
     if (!sections.some(s => s.key === assetCat)) assetCat = 'all';
     const menu = `<span class="seg" id="acats"><button data-c="all" class="${assetCat === 'all' ? 'on' : ''}">all</button>${sections.map(s =>
       `<button data-c="${esc(s.key)}" class="${assetCat === s.key ? 'on' : ''}">${esc(s.label)} <span style="color:var(--muted)">${s.count}</span></button>`).join('')}</span>`;
-    root.innerHTML = `<p style="color:var(--muted);margin:0 0 10px;max-width:1000px">Data marked with <span class="kbd">;@ asset: &lt;type&gt;</span> in the disassembly, rendered straight from the ROM bytes. Tilemaps use the tiles the game itself loads: the generator runs the loading routine in the SM83 emulator and keeps the resulting VRAM.</p>
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-width:1400px">${menu}<span class="spacer"></span>${palBtns}</div>` +
+    root.innerHTML = `<p style="color:var(--muted);margin:0 0 10px;max-width:1000px">Data marked with <span class="kbd">;@ asset: &lt;type&gt;</span> in the disassembly, rendered straight from the ROM bytes. Tilemaps use the tiles the game itself loads, by running its own loading routine. Replays, recordings and charts come from the game's asset plugins.</p>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-width:1400px">${menu}<span class="spacer"></span>${usesPalette((D.assets || []).filter(a => assetCat === 'all' || (a.generated ? a.group : a.type) === assetCat)) ? palBtns : ''}</div>` +
       sections.filter(s => assetCat === 'all' || s.key === assetCat).map(s => s.html).join('');
     $$('.pv[data-a]', root).forEach(el => drawAsset(ASSETS.get(el.dataset.a), el, 'small'));
     $$('#acats button', root).forEach(b => b.onclick = () => { assetCat = b.dataset.c; localStorage.setItem('gbbolt.assetcat', assetCat); renderAssets(); });

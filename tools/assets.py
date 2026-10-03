@@ -39,7 +39,9 @@ import traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 import build  # noqa: E402
 
-ENGINE_FILES = ['assets.py', 'gamerun.py', 'sm83.py', 'audio.py']
+# Bump when engine changes alter what plugins produce (the runner, the audio renderer):
+# plugins are rebuilt only when this, the plugin, its helpers (_*.py) or the ROM change.
+ASSET_ENGINE_VERSION = 2
 
 
 class AssetContext:
@@ -110,8 +112,7 @@ def _key(project, src, plugin_dir):
     h.update(src.encode())
     for f in sorted(glob.glob(os.path.join(plugin_dir, '_*.py'))):     # shared helpers of the plugins
         h.update(open(f, 'rb').read())
-    for f in ENGINE_FILES:
-        h.update(open(os.path.join(HERE, f), 'rb').read())
+    h.update(str(ASSET_ENGINE_VERSION).encode())
     return h.hexdigest()
 
 

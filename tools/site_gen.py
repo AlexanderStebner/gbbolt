@@ -444,7 +444,7 @@ def generate(project):
         'title': build.GAME.get('title') or build.rom_title(project.rom),
         'gameId': build.GAME.get('id'),
         'games': other_games(),
-        'game': {'entry': build.GAME.get('entry'), 'graphRoot': build.GAME.get('graph_root'),
+        'game': {'entry': build.GAME.get('entry'), 'start': build.GAME.get('start'), 'graphRoot': build.GAME.get('graph_root'),
                  'jumpRst': build.GAME.get('jump_table_rst'),
                  'sprites': (build.GAME.get('sprites') or {}).get('routine')},
         'generated': datetime.datetime.now().strftime('%Y-%m-%d %H:%M'),

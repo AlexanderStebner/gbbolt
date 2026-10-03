@@ -5,6 +5,7 @@
     python tools/gbbolt.py verify     check every annotation (verify Name... : just those)
     python tools/gbbolt.py stamp      record `;@ sig:` for passing annotations
     python tools/gbbolt.py site       generate out/site/index.html
+    python tools/gbbolt.py page       rewrite the viewer only, with the last verify results (layout work)
     python tools/gbbolt.py fixheaders add statically found accesses to ;@ reads/writes
 
 Commands can be chained (`gbbolt.py verify site`); the project is loaded once and
@@ -212,9 +213,22 @@ def main():
             if source() != before:
                 project = Project()           # headers changed: parse again
                 print(project.build_msg)
+        elif step == 'page':                  # only rewrite the viewer, with the last verify's results
+            import pickle
+            import site_gen
+            saved = os.path.join(build.OUT, 'verify_results.pickle')
+            if os.path.exists(saved):
+                project.results, project.verify_seconds = pickle.load(open(saved, 'rb'))
+            else:
+                project.verify(None)
+                pickle.dump((project.results, project.verify_seconds), open(saved, 'wb'))
+            print('viewer: ' + site_gen.generate(project))
         elif step in ('verify', 'stamp', 'site'):
             if project.results is None:
                 project.verify(names or None)
+                if not names:
+                    import pickle
+                    pickle.dump((project.results, project.verify_seconds), open(os.path.join(build.OUT, 'verify_results.pickle'), 'wb'))
                 # with names: those units in full; otherwise only the ones with problems
                 print_report(project, names or None, problems_only=not names and 'verify' not in args)
             if step == 'stamp':
@@ -228,7 +242,7 @@ def main():
             sys.exit('{} failing or stale: {}'.format(len(bad), ', '.join(bad[:10])))
 
 
-COMMANDS = ('all', 'build', 'show', 'fixheaders', 'verify', 'stamp', 'site')
+COMMANDS = ('all', 'build', 'show', 'fixheaders', 'verify', 'stamp', 'site', 'page')
 
 
 if __name__ == '__main__':
