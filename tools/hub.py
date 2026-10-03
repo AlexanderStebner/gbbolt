@@ -193,10 +193,10 @@ CARD = '''      <a class="game" href="{id}/">
           <div class="title"><h3>{title}</h3><span>{meta}</span></div>
           <p class="desc">{desc}</p>
           <div class="progress">
-            <div class="pct">{pct}%<small>verified</small></div>
-            <div class="bar" title="{verified} verified, {checked} checked of {functions} functions"><i style="width:{pv}%;background:var(--ok)"></i><i style="width:{pc}%;background:var(--chk)"></i></div>
+            <div class="pct">{pct}%<small>translated</small></div>
+            <div class="bar" title="{annotated} of {functions} functions have pseudo-code: {verified} verified by differential tests, {checked} checked (hardware access, can't run in isolation)"><i style="width:{pv}%;background:var(--ok)"></i><i style="width:{pc}%;background:var(--accent2)"></i></div>
           </div>
-          <div class="stats"><span class="stat"><b>{annotated}</b>/{functions} functions</span><span class="stat"><b>{sounds}</b> sounds</span><span class="stat"><b>{assets}</b> assets</span></div>
+          <div class="stats"><span class="stat"><b>{functions}</b> functions</span><span class="stat" title="the pseudo-code gave identical results to the original code on 64 random machine states"><b>{verified}</b> test-verified</span><span class="stat"><b>{sounds}</b> sounds</span><span class="stat"><b>{assets}</b> assets</span></div>
           <div class="actions"><span class="btn main">Open</span><span class="btn ghost" data-href="https://github.com/{repo}">Source</span></div>
         </div>
       </a>'''
@@ -219,7 +219,7 @@ def main():
         meta = ' · '.join(str(x) for x in (s.get('publisher'), s.get('year')) if x)
         cards.append(CARD.format(
             id=html.escape(g['id']), title=html.escape(g['title']), desc=html.escape(g.get('description', '')),
-            repo=html.escape(g['repo']), shot=shot, meta=html.escape(meta), pct=round(100 * s['verified'] / n),
+            repo=html.escape(g['repo']), shot=shot, meta=html.escape(meta), pct=round(100 * s['annotated'] / n),
             pv=100 * s['verified'] / n, pc=100 * s['checked'] / n,
             **{k: v for k, v in s.items() if k in ('verified', 'checked', 'functions', 'annotated', 'sounds', 'assets')}))
     features = '\n'.join('      <div class="feature">{}<div><b>{}</b><span>{}</span></div></div>'.format(
