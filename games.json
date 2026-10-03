@@ -4,5 +4,11 @@
     "title": "Tetris",
     "repo": "AlexanderStebner/tetris-gbbolt",
     "description": "The whole game: menus, falling pieces, line clears, the 2-player link mode, the rocket and shuttle endings and Hirokazu Tanaka's sound engine."
+  },
+  {
+    "id": "drmario",
+    "title": "Dr. Mario",
+    "repo": "AlexanderStebner/drmario-gbbolt",
+    "description": "Viruses, capsules and chain reactions; the 2-player link mode with its danger music, the underwater cutscenes and the title demo, all played by the game's own code."
   }
 ]

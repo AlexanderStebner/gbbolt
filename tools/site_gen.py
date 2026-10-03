@@ -437,6 +437,8 @@ def generate(project):
 
     consts = {k: {'value': v, 'doc': p.constdoc.get(k, '')} for k, v in p.consts.items()}
     assets, tilesets = collect_assets(project)
+    import assets as plugin_assets          # the game's own asset plugins (<game>/assets/*.py)
+    assets += plugin_assets.collect(project, OUT_DIR)
 
     data = {
         'title': build.GAME.get('title') or build.rom_title(project.rom),

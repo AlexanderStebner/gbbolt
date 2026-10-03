@@ -1468,7 +1468,139 @@ function drawOAM(a, el, size) {
   el.appendChild(holder);
   if (size === 'large') tipLine(el, `${e.length} OAM entries (y, x, tile, attributes) copied straight into the shadow OAM · tile data from running ${a.tileset} · checkerboard = transparent`);
 }
-const RENDERERS = {tiles: drawTiles, tilemap: drawTilemap, logo: drawLogo, header: drawHeader, sprites: drawSprites, oam: drawOAM};
+// ---- display parts for game-defined assets (<game>/assets/*.py, see tools/assets.py)
+function drawImage(a, el, size) {
+  const px = b64(a.pixels), W = a.width, H = a.height;
+  const c = makeCanvas(W, H, size === 'large' ? (a.scale || 3) : 0), ctx = c.getContext('2d');
+  const img = ctx.createImageData(W, H), pal = PALETTES[palName].map(hexRGB);
+  for (let i = 0; i < W * H; i++) {
+    const v = px[i];
+    if (v === 255) continue;
+    img.data[4 * i] = pal[v][0]; img.data[4 * i + 1] = pal[v][1]; img.data[4 * i + 2] = pal[v][2]; img.data[4 * i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  el.appendChild(c);
+}
+// a video of the game's own frames; lanes (button presses, events) scroll underneath in sync
+function drawVideo(a, el, size) {
+  const v = document.createElement('video');
+  v.src = a.file; v.loop = true; v.muted = size !== 'large'; v.playsInline = true;
+  if (a.poster) v.poster = a.poster;
+  v.style.cssText = 'image-rendering:pixelated;display:block;border-radius:6px;' +
+    (size === 'large' ? `width:${Math.min(a.width * 3, 720)}px;max-width:100%` : 'max-width:100%;max-height:150px');
+  if (size !== 'large') {
+    v.preload = 'metadata';
+    el.appendChild(v);
+    const card = el.closest('.acard');
+    if (card) { card.addEventListener('mouseenter', () => v.play().catch(() => {})); card.addEventListener('mouseleave', () => v.pause()); }
+    return;
+  }
+  v.controls = true; v.autoplay = true; v.preload = 'auto';
+  el.appendChild(v);
+  if (!a.lanes || !a.lanes.length) return;
+  const fps = a.fps || 60, span = fps * 4;          // frames shown: the last 2 s and the next 2 s
+  const W = Math.min(a.width * 3, 720), rowH = 18, H = rowH * a.lanes.length + 8;
+  const c = document.createElement('canvas');
+  c.width = W * devicePixelRatio; c.height = H * devicePixelRatio;
+  c.style.cssText = `width:${W}px;height:${H}px;display:block;margin-top:8px;max-width:100%`;
+  el.appendChild(c);
+  const g = c.getContext('2d'), css = getComputedStyle(document.body);
+  const col = n => css.getPropertyValue(n).trim();
+  function paint() {
+    if (!c.isConnected) return;
+    const f = v.currentTime * fps, x0 = f - span / 2, sx = W / span;
+    g.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    g.clearRect(0, 0, W, H);
+    g.font = '11px ' + col('--mono');
+    a.lanes.forEach((ln, i) => {
+      const y = 4 + i * rowH;
+      g.fillStyle = col('--panel2'); g.fillRect(0, y, W, rowH - 4);
+      g.fillStyle = col('--accent');
+      ln.spans.forEach(([s, e]) => {
+        if (e < x0 || s > x0 + span) return;
+        g.fillRect((s - x0) * sx, y, Math.max(2, (e - s) * sx), rowH - 4);
+      });
+      g.fillStyle = col('--text'); g.fillText(ln.name, 4, y + rowH - 8);
+    });
+    g.fillStyle = col('--bad') || '#d33'; g.fillRect(W / 2 - 1, 0, 2, H);
+    requestAnimationFrame(paint);
+  }
+  requestAnimationFrame(paint);
+  tipLine(el, 'frames from running the game\'s own code in the SM83 emulator; the lanes show the buttons held, the red line is now');
+}
+// line / step / bar charts as SVG
+function drawChart(a, el, size) {
+  const big = size === 'large', W = big ? 720 : 220, H = big ? 320 : 130;
+  const pad = big ? {l: 54, r: 14, t: 14, b: 44} : {l: 6, r: 6, t: 6, b: 6};
+  const all = a.series.flatMap(s => s.points);
+  const xs = all.map(p => p[0]), ys = all.map(p => p[1]);
+  const bar = a.kind === 'bar';
+  let x0 = Math.min(...xs), x1 = Math.max(...xs);
+  if (bar) { x0 -= 0.5; x1 += 0.5; }
+  const y0 = Math.min(0, ...ys), y1 = Math.max(...ys) * 1.08 || 1;
+  const X = x => pad.l + (x - x0) / ((x1 - x0) || 1) * (W - pad.l - pad.r);
+  const Y = y => H - pad.b - (y - y0) / ((y1 - y0) || 1) * (H - pad.t - pad.b);
+  const colors = ['var(--accent)', '#e08a2a', '#9b59b6', '#2a9d8f', '#d33'];
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:100%;height:auto;font:11px var(--mono)">`;
+  if (big) {
+    for (let k = 0; k <= 4; k++) {
+      const yv = y0 + (y1 - y0) * k / 4, y = Y(yv);
+      s += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}" stroke="var(--border)"/><text x="${pad.l - 6}" y="${y + 4}" text-anchor="end" fill="var(--muted)">${+yv.toFixed(yv < 10 ? 1 : 0)}</text>`;
+    }
+    const ticks = a.xticks || [...new Set(xs)].filter((_, i, arr) => arr.length < 25 || i % Math.ceil(arr.length / 20) === 0).map(x => [x, x]);
+    ticks.forEach(([x, label]) => { s += `<text x="${X(x)}" y="${H - pad.b + 14}" text-anchor="middle" fill="var(--muted)">${esc(String(label))}</text>`; });
+    s += `<text x="${(W + pad.l) / 2}" y="${H - 8}" text-anchor="middle" fill="var(--text)">${esc(a.x || '')}</text>`;
+    s += `<text transform="rotate(-90)" x="${-(H - pad.b + pad.t) / 2}" y="14" text-anchor="middle" fill="var(--text)">${esc(a.y || '')}</text>`;
+    (a.marks || []).forEach(m => { s += `<line x1="${X(m.x)}" x2="${X(m.x)}" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--muted)" stroke-dasharray="3 3"/><text x="${X(m.x) + 4}" y="${pad.t + 10}" fill="var(--muted)">${esc(m.label)}</text>`; });
+  }
+  const n = a.series.length;
+  a.series.forEach((ser, si) => {
+    const c = ser.color || colors[si % colors.length];
+    if (bar) {
+      const bw = (X(1) - X(0)) * 0.8 / n;
+      ser.points.forEach(([x, y]) => {
+        const left = X(x) - (X(1) - X(0)) * 0.4 + si * bw;
+        s += `<rect x="${left}" y="${Y(y)}" width="${Math.max(1, bw - 1)}" height="${Y(y0) - Y(y)}" fill="${c}"><title>${esc(ser.name)}: ${x} → ${y}</title></rect>`;
+      });
+    } else {
+      let d = '';
+      ser.points.forEach(([x, y], i) => {
+        if (i && a.kind === 'step') d += ` H${X(x)}`;
+        d += `${i ? ' L' : 'M'}${X(x)} ${Y(y)}`;
+      });
+      s += `<path d="${d}" fill="none" stroke="${c}" stroke-width="2"/>`;
+      if (big) ser.points.forEach(([x, y]) => { s += `<circle cx="${X(x)}" cy="${Y(y)}" r="3" fill="${c}"><title>${esc(ser.name)}: ${x} → ${y}</title></circle>`; });
+    }
+  });
+  s += '</svg>';
+  if (big && n > 1) s += `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;margin-top:4px">${a.series.map((ser, si) =>
+    `<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${ser.color || colors[si % colors.length]};margin-right:5px"></span>${esc(ser.name)}</span>`).join('')}</div>`;
+  el.insertAdjacentHTML('beforeend', s);
+}
+function tableCell(c) {
+  if (c === null || c === undefined) return '';
+  if (typeof c !== 'object') return esc(String(c));
+  if (c.code) return `<a href="#/code/${encodeURIComponent(c.code)}">${esc(c.text || c.code)}</a>`;
+  if (c.image) return `<span class="timg" data-img="${esc(JSON.stringify(c.image))}"></span>${c.text ? ' ' + esc(c.text) : ''}`;
+  return esc(c.text || '');
+}
+function drawTable(a, el, size) {
+  const rows = size === 'large' ? a.rows : a.rows.slice(0, 6);
+  el.insertAdjacentHTML('beforeend', `<table class="kv" style="font-size:${size === 'large' ? 13 : 11}px"><tr>${a.columns.map(c => `<td style="font-weight:600;color:var(--text)">${esc(c)}</td>`).join('')}</tr>${rows.map(r =>
+    `<tr>${r.map(c => `<td class="m">${tableCell(c)}</td>`).join('')}</tr>`).join('')}${rows.length < a.rows.length ? `<tr><td colspan="${a.columns.length}">… ${a.rows.length - rows.length} more</td></tr>` : ''}</table>`);
+  $$('.timg', el).forEach(s => drawImage(Object.assign({scale: size === 'large' ? 2 : 1}, JSON.parse(s.dataset.img)), s, 'large'));
+}
+function drawTracks(a, el, size) {
+  if (size !== 'large') {
+    el.insertAdjacentHTML('beforeend', `<div style="text-align:center;color:var(--muted);font-size:13px">♪ ${a.tracks.length} recordings</div>`);
+    return;
+  }
+  el.insertAdjacentHTML('beforeend', `<div style="display:flex;flex-direction:column;gap:10px;min-width:min(560px,100%)">${a.tracks.map(t =>
+    `<div><div style="display:flex;justify-content:space-between;gap:12px;font-size:13px"><b>${esc(t.title)}</b><span style="color:var(--muted)">${esc(t.note || '')}</span></div>${playerHtml(t.file, t.seconds)}</div>`).join('')}</div>`);
+}
+function drawError(a, el) { el.innerHTML = `<span class="badv">${esc(a.error || 'failed')}</span>`; }
+const RENDERERS = {tiles: drawTiles, tilemap: drawTilemap, logo: drawLogo, header: drawHeader, sprites: drawSprites, oam: drawOAM,
+  image: drawImage, video: drawVideo, chart: drawChart, table: drawTable, tracks: drawTracks, error: drawError};
 const TYPE_TEXT = {tiles: 'tile sheets', tilemap: 'tilemaps', logo: 'logo', header: 'cartridge header', sprites: 'sprites', oam: 'sprite layouts'};
 function drawAsset(a, el, size) {
   if (a.error) { el.innerHTML = `<span class="badv">${esc(a.error)}</span>`; return; }
@@ -1560,7 +1692,17 @@ function renderAssets(sel) {
   player.stop();
   const root = $('#assets');
   const palBtns = `<span class="seg" id="palsel">${Object.keys(PALETTES).map(k => `<button data-p="${k}" class="${k === palName ? 'on' : ''}">${k === 'dmg' ? 'DMG green' : 'grey'}</button>`).join('')}</span>`;
-  if (sel && ASSETS.has(sel)) {
+  if (sel && ASSETS.has(sel) && ASSETS.get(sel).generated) {
+    const a = ASSETS.get(sel);
+    const users = (a.users || []).length ? a.users.map(n => `<a class="chip" href="#/code/${encodeURIComponent(n)}">${esc(n)}</a>`).join(' ') : '<span style="color:var(--muted)">—</span>';
+    root.innerHTML = `<p style="margin-top:0"><a href="#/assets">← all assets</a></p>
+      <h1 style="font:600 18px var(--mono);margin:0 0 4px">${esc(a.title || a.name)} <span class="badge">${esc(a.type)}</span></h1>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:12px">made by the game's asset plugin ${esc(a.generated)}</div>
+      <div class="adetail"><div><div class="astage" id="astage"></div><div style="margin-top:8px">${a.type === 'image' ? palBtns : ''}</div></div>
+        <div class="ameta">${(a.doc || []).map(d => `<p style="margin-top:0">${hl(d, 'doc')}</p>`).join('')}
+          <table class="kv"><tr><td>code</td><td>${users}</td></tr></table></div></div>`;
+    drawAsset(a, $('#astage'), 'large');
+  } else if (sel && ASSETS.has(sel)) {
     const a = ASSETS.get(sel);
     const users = a.users.length ? a.users.map(n => `<a class="chip" href="#/code/${encodeURIComponent(n)}">${esc(n)}</a>`).join(' ') : '<span style="color:var(--muted)">—</span>';
     root.innerHTML = `<p style="margin-top:0"><a href="#/assets">← all assets</a></p>
@@ -1575,13 +1717,14 @@ function renderAssets(sel) {
     drawAsset(a, $('#astage'), 'large');
   } else {
     const groups = {};
-    (D.assets || []).forEach(a => (groups[a.type] = groups[a.type] || []).push(a));
-    const order = ['header', 'logo', 'sprites', 'oam', 'tilemap', 'tiles'].filter(t => groups[t]).concat(Object.keys(groups).filter(t => !RENDERERS[t]));
+    (D.assets || []).forEach(a => { const g = a.generated ? a.group : a.type; (groups[g] = groups[g] || []).push(a); });
+    const builtin = ['header', 'logo', 'sprites', 'oam', 'tilemap', 'tiles'];
+    const order = builtin.filter(t => groups[t]).concat(Object.keys(groups).filter(t => !builtin.includes(t)));
     const kindText = (D.audio && D.audio.kinds) || {};
     const audio = (D.audio && D.audio.items) || [];
     const sections = order.map(type => ({key: type, label: TYPE_TEXT[type] || type, count: groups[type].length,
       html: `<h3>${esc(TYPE_TEXT[type] || type)} (${groups[type].length})</h3><div class="agrid">${groups[type].map(a =>
-        `<a class="acard" href="#/assets/${encodeURIComponent(a.name)}"><div class="pv" data-a="${esc(a.name)}"></div><div class="cap"><b>${esc(a.name)}</b><div>${hex4(a.start)} · ${a.length} bytes</div></div></a>`).join('')}</div>`}));
+        `<a class="acard" href="#/assets/${encodeURIComponent(a.name)}"><div class="pv" data-a="${esc(a.name)}"></div><div class="cap"><b>${esc(a.title || a.name)}</b><div>${a.generated ? esc(a.subtitle || a.type) : `${hex4(a.start)} · ${a.length} bytes`}</div></div></a>`).join('')}</div>`}));
     const kinds = [...new Set(audio.map(a => a.kind))];
     if (kinds.length) sections.push({key: 'audio', label: 'music & sound', count: audio.length,
       html: `<h3>Music &amp; sound effects (${audio.length})</h3>

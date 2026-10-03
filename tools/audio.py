@@ -86,12 +86,15 @@ class Engine:
     def word(self, a):
         return self.mem[a] | self.mem[a + 1] << 8
 
-    def frames(self, kind, number, max_frames):
-        """Request a sound, then yield the register writes of each frame until it ends."""
+    def frames(self, kind, number, max_frames, pokes=None):
+        """Request a sound, then yield the register writes of each frame until it ends.
+        pokes: {address: value} written before every update (what the game would keep setting)."""
         k = self.cfg['kinds'][kind]
         self.mem[k['request']] = number
         started = False
         for f in range(max_frames):
+            for a, v in (pokes or {}).items():
+                self.mem[a] = v
             writes = self.call(self.cfg['update'])
             playing = self.mem[k['playing']]
             started = started or bool(playing)
@@ -490,7 +493,7 @@ class Timeline:
             if self.open[i]:
                 self.close(i, frames)
             self.notes[i] = [n for n in self.notes[i] if n['d'] > 0]
-        out = {'frames': frames, 'fps': FRAME_HZ, 'ch': self.notes, 'pan': self.pan,
+        out = {'frames': frames, 'fps': self.cfg.get('update_hz', FRAME_HZ), 'ch': self.notes, 'pan': self.pan,
                'master': self.master, 'waves': self.waves}
         if self.sections is not None:
             out['sections'] = self.sections
@@ -498,9 +501,19 @@ class Timeline:
 
 
 # ---------------------------------------------------------------- rendering
-def render(rom, syms, cfg, kind, number):
-    """(mix, [4 channel stems], timeline, seconds, loop start in seconds or None)."""
-    k = cfg['kinds'][kind]
+def render(rom, syms, cfg, kind, number, pokes=None, hz=None, max_seconds=None, loops=None):
+    """(mix, [4 channel stems], timeline, seconds, loop start in seconds or None).
+
+    The engine runs `update_hz` times a second (sound.json; default the frame rate, for
+    engines driven by VBlank). hz overrides it (a game that changes its timer), pokes
+    are RAM bytes set before every update, max_seconds / loops override the kind's."""
+    k = dict(cfg['kinds'][kind])
+    if max_seconds is not None:
+        k['max_seconds'] = max_seconds
+    if loops is not None:
+        k['loops'] = loops
+    FRAME_HZ = hz or cfg.get('update_hz', globals()['FRAME_HZ'])
+    cfg = dict(cfg, update_hz=FRAME_HZ)
     eng = Engine(rom, syms, cfg)
     apu = APU()
     for a, v in cfg['power_on']:
@@ -508,7 +521,7 @@ def render(rom, syms, cfg, kind, number):
     tl = Timeline(cfg, eng)
     chans = [([], []) for _ in range(4)]
     acc, count = 0.0, 0
-    for writes in eng.frames(kind, number, int(k['max_seconds'] * FRAME_HZ)):
+    for writes in eng.frames(kind, number, int(k['max_seconds'] * FRAME_HZ), pokes):
         for a, v in writes:
             apu.write(a, v)
         tl.frame(count, apu, writes)

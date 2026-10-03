@@ -133,10 +133,26 @@ TitleScreenTilemap::
 | `tiles` | `bpp=1\|2`, `length=`, `width=` (tiles per row, default 16) | a tile sheet, hover for tile number / ROM address |
 | `tilemap` | `width=`, `height=`, `tiles=Routine` or `tiles=Routine(hl=Label,bc=$1000)` | the screen exactly as the game shows it |
 | `sprites` | `count=`, `tiles=...` | every sprite id, drawn by the game's own routine (`game.json` → `sprites`) |
+| `oam` | `tiles=...`, `end=$FD` or `length=` | a sprite layout stored as ready-made OAM entries |
+| `rows` | `tiles=...`, `width=` or `newline=`, `blank=` | a string of tiles (messages, text panels) |
 
 For tilemaps, `tiles=` names the game's own tile-loading routine. The generator runs it in the SM83
 interpreter (with the given registers) and uses the VRAM it leaves behind, so no tile layout has to be
-described by hand. New asset types only need a renderer in `tools/viewer.html` (`RENDERERS`).
+described by hand. Several loaders can be chained with `+` (a base tile set, then what a screen loads
+over it). `game.json` → `tile_addressing: "8800"` for games whose BG uses the signed tile numbers.
+
+### Asset plugins
+
+Everything else a game wants to show lives in its own repository, in `assets/*.py`: each file
+has a `build(ctx)` that returns assets made of a few display parts the viewer knows - `image`,
+`video` (with lanes of events under it, e.g. the buttons held), `chart` (line, step, bar),
+`table` (cells may link into the code or hold small images) and `tracks` (audio). `ctx` gives the
+plugin the ROM and its names, a `GameRunner` (`tools/gamerun.py`) that runs the game's own code
+frame by frame and renders the screen from VRAM / OAM, the tile loaders, and video and audio
+writers (the game's sound engine, with RAM pokes and a different update rate). So a world map, a
+table of monsters or a replay needs no change to the engine. Results are cached in
+`out/site/gen/` and rebuilt only when the plugin, the ROM or the engine changes. See
+`tools/assets.py` for the details and the Dr. Mario repository for examples.
 
 ## What is specific to a game
 
