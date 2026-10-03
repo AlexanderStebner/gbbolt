@@ -57,11 +57,36 @@ def load_config():
     cfg['power_on'] = [(addr(a), v) for a, v in cfg['power_on']]
     cfg['stack'] = addr(cfg.get('stack', '0xCFFF'))
     for k in cfg['kinds'].values():
-        k['request'], k['playing'] = addr(k['request']), addr(k['playing'])
+        k['request'] = addr(k['request'])
+        # 'playing': one byte (the id playing, 0 = none) or a list of bytes, any of them
+        # with 'playing_mask' set means the sound still plays
+        k['playing'] = [addr(a) for a in k['playing']] if isinstance(k['playing'], list) else addr(k['playing'])
+        if 'count' in k:                       # a sound queue: its length byte, set to 1 with the request
+            k['count'] = addr(k['count'])
+        k['ids'] = item_ids(k)
     mc = cfg.get('music_channels')
     if mc:
         mc['structs'] = [addr(s) for s in mc['structs']]
     return cfg
+
+
+def item_ids(k):
+    """The ids of a kind: 'ids' is [first, last] or {"list": [...]}."""
+    ids = k['ids']
+    if isinstance(ids, dict):
+        return list(ids['list'])
+    if isinstance(ids, list) and len(ids) == 2 and ids[0] <= ids[1]:
+        return list(range(ids[0], ids[1] + 1))
+    return list(ids)
+
+
+def playing(mem, k):
+    """The id playing for a kind (0 = none); with a list of bytes: 1 while any is set."""
+    p = k['playing']
+    if isinstance(p, list):
+        mask = k.get('playing_mask', 0xFF)
+        return int(any(mem[a] & mask for a in p))
+    return mem[p]
 
 
 # ---------------------------------------------------------------- engine
@@ -91,15 +116,18 @@ class Engine:
         pokes: {address: value} written before every update (what the game would keep setting)."""
         k = self.cfg['kinds'][kind]
         self.mem[k['request']] = number
+        if 'count' in k:
+            self.mem[k['count']] = 1
+        self.current = (kind, number)
         started = False
         for f in range(max_frames):
             for a, v in (pokes or {}).items():
                 self.mem[a] = v
             writes = self.call(self.cfg['update'])
-            playing = self.mem[k['playing']]
-            started = started or bool(playing)
+            now = playing(self.mem, k)
+            started = started or bool(now)
             yield writes
-            if (started and not playing) or (not started and f > 3):
+            if (started and not now) or (not started and f > 3):
                 break
 
 
@@ -402,8 +430,12 @@ class Timeline:
             if not mem[mc['structs'][i] + off] & bit:
                 return 'music'
         for kind, chans in self.cfg.get('effect_channels', {}).items():
-            n = mem[self.cfg['kinds'][kind]['playing']]
+            k = self.cfg['kinds'][kind]
+            n = playing(mem, k)
             if i in chans and n:
+                if isinstance(k['playing'], list):        # no id byte: the sound being rendered
+                    cur = getattr(self.eng, 'current', None)
+                    n = cur[1] if cur and cur[0] == kind else n
                 return '{} {}'.format(kind, n)
         return 'music'
 
@@ -519,12 +551,15 @@ def render(rom, syms, cfg, kind, number, pokes=None, hz=None, max_seconds=None, 
     for a, v in cfg['power_on']:
         apu.write(a, v)
     tl = Timeline(cfg, eng)
+    fixed_loop = cfg.get('loop_frames', {}).get('{} {}'.format(kind, number))   # [start, jump back]
     chans = [([], []) for _ in range(4)]
     acc, count = 0.0, 0
     for writes in eng.frames(kind, number, int(k['max_seconds'] * FRAME_HZ), pokes):
         for a, v in writes:
             apu.write(a, v)
         tl.frame(count, apu, writes)
+        if fixed_loop and count >= fixed_loop[1]:
+            tl.loop = tuple(fixed_loop)
         if k.get('loops') and tl.loop:             # once through: stop where it jumps back
             break
         acc += RATE / FRAME_HZ
@@ -605,7 +640,7 @@ def main():
     if len(sys.argv) == 3:
         items = [(sys.argv[1], int(sys.argv[2], 0))]
     else:
-        items = [(kind, n) for kind, k in cfg['kinds'].items() for n in range(k['ids'][0], k['ids'][1] + 1)]
+        items = [(kind, n) for kind, k in cfg['kinds'].items() for n in k['ids']]
     index_path = os.path.join(outdir, 'index.json')
     index = {(e['kind'], e['id']): e for e in json.load(open(index_path))} if len(items) == 1 and os.path.exists(index_path) else {}
     for kind, n in items:

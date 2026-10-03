@@ -286,7 +286,8 @@ def parse(src_dir, rom, syms):
                     if hdr['asset']:
                         unit.asset = dict(hdr['asset'], doc=hdr['doc'])
                     unit.path = hdr['path']
-                    path_only = all(t.startswith(';@ path:') or not re.match(r';@ \w+:', t) for t in unit.header)                         and not any(t.startswith(';@ def ') for t in unit.header)
+                    keys = [re.match(r';@ (\w+):', t) for t in unit.header]      # doc lines may start with "Word:"
+                    path_only = all(not k or k.group(1) not in HEADER_KEYS or k.group(1) == 'path' for k in keys)                         and not any(t.startswith(';@ def ') for t in unit.header)
                     if hdr['def'] or not (hdr['asset'] or path_only):
                         unit.func = hdr
                 p.units.append(unit)

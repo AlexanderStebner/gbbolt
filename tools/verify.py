@@ -94,6 +94,8 @@ def setup_namespace(data, rng, env):
         cpu.sp = cfg['stack']
         cpu.call(env.syms[cfg['init']])
         data[cfg['kinds'][kind]['request']] = number
+        if 'count' in cfg['kinds'][kind]:
+            data[cfg['kinds'][kind]['count']] = 1
         for _ in range(frames):
             cpu.sp = cfg['stack']
             cpu.call(env.syms[cfg['update']])

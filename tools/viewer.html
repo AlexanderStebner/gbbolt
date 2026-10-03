@@ -1310,14 +1310,14 @@ let palName = localStorage.getItem('gbbolt.palette') || 'dmg';
 const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const tilesetCache = {};
 const tileset = key => tilesetCache[key] || (tilesetCache[key] = D.tilesets[key] ? b64(D.tilesets[key]) : null);
-const BGP = [0, 1, 2, 3];   // BGP = $E4: colour n -> shade n
+const BGP = (b => [0, 1, 2, 3].map(c => (b >> (2 * c)) & 3))(G.bgp !== undefined && G.bgp !== null ? G.bgp : 0xE4);   // the game's BG palette (game.json bgp, default $E4)
 const hexRGB = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 function blitTile(img, W, px, py, data, off, bpp) {
   const pal = PALETTES[palName].map(hexRGB);
   for (let y = 0; y < 8; y++) {
     const lo = data[off + (bpp === 1 ? y : 2 * y)] || 0, hi = bpp === 1 ? lo : (data[off + 2 * y + 1] || 0);
     for (let x = 0; x < 8; x++) {
-      const c = BGP[((hi >> (7 - x)) & 1) << 1 | ((lo >> (7 - x)) & 1)];
+      const raw = ((hi >> (7 - x)) & 1) << 1 | ((lo >> (7 - x)) & 1), c = bpp === 1 ? raw : BGP[raw];
       const i = ((py + y) * W + px + x) * 4;
       img.data[i] = pal[c][0]; img.data[i + 1] = pal[c][1]; img.data[i + 2] = pal[c][2]; img.data[i + 3] = 255;
     }

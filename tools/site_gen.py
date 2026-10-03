@@ -3,6 +3,7 @@ import base64
 import datetime
 import json
 import os
+import shutil
 import re
 
 import build
@@ -164,6 +165,11 @@ def resolve_value(project, v):
     return int(v[1:], 16) if v.startswith('$') else int(v, 0)
 
 
+def resolve_bgp():
+    v = build.GAME.get('bgp')
+    return int(str(v).replace('$', '0x'), 0) if v is not None else None
+
+
 def run_loader(project, spec):
     """Run a tile-loading routine in the SM83 interpreter; return VRAM tile data ($8000-$97FF).
 
@@ -172,6 +178,7 @@ def run_loader(project, spec):
     """
     mem = bytearray(0x10000)
     mem[0:0x8000] = project.rom[0:0x8000]
+    mem[0xFF44] = 0x91                 # rLY: in VBlank, for loaders that switch the LCD off first
     for step in spec.split('+'):
         m = re.match(r'^(\w+)(?:\((.*)\))?$', step)
         name, args = m.group(1), m.group(2) or ''
@@ -313,8 +320,15 @@ def write_png(path, width, height, rgb_rows):
 
 
 def write_thumbnail(assets, tilesets, path, scale=2):
-    """The tilemap asset named in game.json "thumbnail" as a PNG in DMG colours (for the hub)."""
+    """The tilemap asset named in game.json "thumbnail" as a PNG in DMG colours (for the hub),
+    or a .png under out/site/ (e.g. a poster an asset plugin wrote into gen/)."""
     name = build.GAME.get('thumbnail')
+    if name and name.endswith('.png'):          # a picture an asset plugin wrote (out/site/gen/...)
+        src = os.path.join(os.path.dirname(path), name)
+        if not os.path.exists(src):
+            return False
+        shutil.copyfile(src, path)
+        return True
     a = next((x for x in assets if x['name'] == name and x['type'] == 'tilemap'), None)
     if not a or a.get('tileset') not in tilesets:
         return False
@@ -444,7 +458,7 @@ def generate(project):
         'title': build.GAME.get('title') or build.rom_title(project.rom),
         'gameId': build.GAME.get('id'),
         'games': other_games(),
-        'game': {'entry': build.GAME.get('entry'), 'start': build.GAME.get('start'), 'graphRoot': build.GAME.get('graph_root'),
+        'game': {'entry': build.GAME.get('entry'), 'start': build.GAME.get('start'), 'bgp': resolve_bgp(), 'graphRoot': build.GAME.get('graph_root'),
                  'jumpRst': build.GAME.get('jump_table_rst'),
                  'sprites': (build.GAME.get('sprites') or {}).get('routine')},
         'generated': datetime.datetime.now().strftime('%Y-%m-%d %H:%M'),

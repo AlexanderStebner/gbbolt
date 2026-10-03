@@ -130,6 +130,7 @@ def main():
             elif src_name and src_val < 0x8000 and not src_name.startswith(('jr_', 'Call_', 'Jump_')):
                 label_votes.setdefault(src_name, set()).add(tgt[1])
     labels = {n: a.pop() for n, a in label_votes.items() if len(a) == 1}
+    labels = {n: a for n, a in labels.items() if a < 0x8000}     # a ROM label must be in ROM here too
     labels = {n: a for n, a in labels.items() if n not in have_names and list(labels.values()).count(a) == 1}
     variables = {n: a.pop() for n, a in var_votes.items() if len(a) == 1}
     variables = {n: a for n, a in variables.items() if n not in have_names and a not in have_vars

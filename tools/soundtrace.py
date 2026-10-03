@@ -28,7 +28,7 @@ def trace(rom, syms):
         ap.parse_ram_inc(os.path.join(build.SRC, 'ram.inc'), p)
         pause_addr = p.vars[pause['var']]['addr']
     items = [(kind, n, 1500 if k.get('loops') else 300) for kind, k in cfg['kinds'].items()
-             for n in range(k['ids'][0], k['ids'][1] + 1)]
+             for n in k['ids']]
     for kind, n, frames in items:
         eng = Engine(rom, syms, cfg)
         cpu = eng.cpu
@@ -39,6 +39,8 @@ def trace(rom, syms):
             orig()
         cpu.step = step
         eng.mem[cfg['kinds'][kind]['request']] = n
+        if 'count' in cfg['kinds'][kind]:
+            eng.mem[cfg['kinds'][kind]['count']] = 1
         try:
             for f in range(frames):
                 if pause_addr is not None and f == 200:
