@@ -311,6 +311,8 @@ def parse(src_dir, rom, syms):
             # inside a MACRO / REPT / LOAD block, or a line the assembler skipped (IF branch)
             ln.kind = 'directive' if s.ctx == 'block' else 'inactive'
             ln.text, ln.comment, ln.addr = stripped, cstrip, None
+            if pending_header and LABEL_RE.match(stripped):
+                pending_header = []                # the header of a label that is not assembled
             if not (s.in_section is False and s.ctx == 'block'):
                 attach(idx, ln)
             continue
