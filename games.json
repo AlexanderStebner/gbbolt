@@ -16,5 +16,11 @@
     "title": "Kwirk",
     "repo": "AlexanderStebner/kwirk-gbbolt",
     "description": "The tomato's puzzle rooms: all 150 rooms drawn by the game itself, blocks, holes and turnstiles, random courses, the 2-player link mode and the endings at Kwirk's house."
+  },
+  {
+    "id": "motocross",
+    "title": "Motocross Maniacs",
+    "repo": "AlexanderStebner/motocross-gbbolt",
+    "description": "Two laps against the clock: all 8 courses as whole maps with every item marked, the track pieces they are built from, bike physics, the computer rider and the sound engine."
   }
 ]
