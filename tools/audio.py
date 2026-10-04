@@ -33,7 +33,7 @@ sys.path.insert(0, HERE)
 import asmparse  # noqa: E402
 import build  # noqa: E402
 from analyze import load_io_names  # noqa: E402
-from sm83 import CPU  # noqa: E402
+from sm83 import CPU, MBC  # noqa: E402
 
 RATE = 44100
 FRAME_HZ = 4194304 / 70224          # 59.7275 frames per second
@@ -47,9 +47,13 @@ def load_config():
     """src/sound.json with RAM / IO names resolved to addresses."""
     cfg = json.load(open(os.path.join(build.SRC, 'sound.json'), encoding='utf-8'))
     p = asmparse.Parsed()
-    asmparse.parse_ram_inc(os.path.join(build.SRC, 'ram.inc'), p)
+    ram_inc = os.path.join(build.SRC, 'ram.inc')
+    if os.path.exists(ram_inc):
+        asmparse.parse_ram_inc(ram_inc, p)
     io, _ = load_io_names(build.SRC)
     names = {v['name']: v['addr'] for v in p.vars.values() if isinstance(v, dict) and 'addr' in v}
+    if not os.path.exists(ram_inc):              # RAM labelled in the assembled source: names from the .sym file
+        names.update({n: a for n, a in build.read_sym().items() if a >= 0x8000 and '.' not in n})
     names.update({n: a for a, n in io.items()})
 
     def addr(x):
@@ -57,7 +61,10 @@ def load_config():
     cfg['power_on'] = [(addr(a), v) for a, v in cfg['power_on']]
     cfg['stack'] = addr(cfg.get('stack', '0xCFFF'))
     for k in cfg['kinds'].values():
-        k['request'] = addr(k['request'])
+        if 'request' in k:                     # the RAM byte the request goes into (or 'request_call': a routine)
+            k['request'] = addr(k['request'])
+        # 'setup': RAM written once before the request (e.g. which bank's engine plays it)
+        k['setup'] = [(addr(a), v) for a, v in k.get('setup', {}).items()]
         # 'playing': one byte (the id playing, 0 = none) or a list of bytes, any of them
         # with 'playing_mask' set means the sound still plays
         k['playing'] = [addr(a) for a in k['playing']] if isinstance(k['playing'], list) else addr(k['playing'])
@@ -70,6 +77,12 @@ def load_config():
     mc = cfg.get('music_channels')
     if mc:
         mc['structs'] = [addr(s) for s in mc['structs']]
+    # 'loop_channels': {'count', 'fields': [[RAM name, bytes per channel], ...], 'active': RAM name (a byte per
+    # channel, 0 = unused)}: a channel loops when its fields repeat an earlier state (engines without pattern lists)
+    lc = cfg.get('loop_channels')
+    if lc:
+        lc['fields'] = [(addr(a), n) for a, n in lc['fields']]
+        lc['active'] = addr(lc['active']) if lc.get('active') else None
     return cfg
 
 
@@ -99,14 +112,19 @@ class Engine:
     def __init__(self, rom, syms, cfg):
         self.mem = bytearray(0x10000)
         self.mem[0:0x8000] = rom[0:0x8000]
-        self.cpu = CPU(self.mem)
+        self.mbc = MBC(rom, self.mem) if len(rom) > 0x8000 else None    # banked games switch banks as they play
+        self.cpu = CPU(self.mem, self.mbc)
         self.syms, self.cfg = syms, cfg
-        self.call(cfg['init'])
+        self.call(cfg['init'], bank=build.SYM_BANK.get(cfg['init']))
 
-    def call(self, name):
+    def call(self, name, a=None, bank=None):
         cpu = self.cpu
         cpu.sp = self.cfg['stack']
         cpu.io_log = []
+        if bank and self.mbc:
+            self.mbc.map(bank)
+        if a is not None:
+            cpu.a = a
         cpu.call(self.syms[name], max_steps=500000)
         log, cpu.io_log = cpu.io_log, None
         return log
@@ -118,7 +136,17 @@ class Engine:
         """Request a sound, then yield the register writes of each frame until it ends.
         pokes: {address: value} written before every update (what the game would keep setting)."""
         k = self.cfg['kinds'][kind]
-        self.mem[k['request']] = number
+        bank = k.get('bank')
+        update = k.get('update', self.cfg['update'])
+        request = k.get('requests', {}).get(str(number), number)    # item id -> request byte (default: the same)
+        for a, v in k.get('setup', ()):
+            self.mem[a] = v
+        if 'request_call' in k:                # a routine takes the request in A (RAM the game sets first: pokes)
+            for a, v in (pokes or {}).items():
+                self.mem[a] = v
+            self.pre_writes = self.call(k['request_call'], a=request, bank=bank or build.SYM_BANK.get(k['request_call']))
+        else:
+            self.mem[k['request']] = request
         if 'count' in k:
             self.mem[k['count']] = 1
         self.current = (kind, number)
@@ -126,7 +154,10 @@ class Engine:
         for f in range(max_frames):
             for a, v in (pokes or {}).items():
                 self.mem[a] = v
-            writes = self.call(self.cfg['update'])
+            writes = self.call(update, bank=bank)
+            if f == 0 and getattr(self, 'pre_writes', None):
+                writes = self.pre_writes + writes
+                self.pre_writes = None
             now = playing(self.mem, k)
             started = started or bool(now)
             yield writes
@@ -432,7 +463,11 @@ class Timeline:
             off, bit = mc['effect_flag']
             if not mem[mc['structs'][i] + off] & bit:
                 return 'music'
-        for kind, chans in self.cfg.get('effect_channels', {}).items():
+        kinds = list(self.cfg.get('effect_channels', {}).items())
+        cur = getattr(self.eng, 'current', None)
+        if self.cfg.get('owner_current_first') and cur:      # kinds sharing their playing bytes: the one rendered
+            kinds.sort(key=lambda kc: kc[0] != cur[0])
+        for kind, chans in kinds:
             k = self.cfg['kinds'][kind]
             n = playing(mem, k)
             if i in chans and n:
@@ -557,10 +592,28 @@ def render(rom, syms, cfg, kind, number, pokes=None, hz=None, max_seconds=None, 
     fixed_loop = cfg.get('loop_frames', {}).get('{} {}'.format(kind, number))   # [start, jump back]
     chans = [([], []) for _ in range(4)]
     acc, count = 0.0, 0
+    lc = cfg.get('loop_channels')
+    states = [{} for _ in range(lc['count'])] if lc and k.get('loops') else None
+    prev_state, looped = [None] * (lc['count'] if lc else 0), {}
     for writes in eng.frames(kind, number, int(k['max_seconds'] * FRAME_HZ), pokes):
         for a, v in writes:
             apu.write(a, v)
         tl.frame(count, apu, writes)
+        if states is not None and tl.loop is None:      # each channel's state repeats: it loops from there
+            mem = eng.mem
+            for i in range(lc['count']):
+                if i in looped or (lc.get('active') and not mem[lc['active'] + i]):
+                    continue
+                st = b''.join(bytes(mem[a + i * n:a + i * n + n]) for a, n in lc['fields'])
+                if st != prev_state[i]:                  # (compared where it changes: at the notes)
+                    if st in states[i]:
+                        looped[i] = states[i][st]
+                    else:
+                        states[i][st] = count
+                    prev_state[i] = st
+            active = [i for i in range(lc['count']) if not lc.get('active') or mem[lc['active'] + i]]
+            if active and all(i in looped for i in active):   # the song repeats once every channel has looped
+                tl.loop = (max(looped[i] for i in active), count)
         if fixed_loop and count >= fixed_loop[1]:
             tl.loop = tuple(fixed_loop)
         if k.get('loops') and tl.loop:             # once through: stop where it jumps back

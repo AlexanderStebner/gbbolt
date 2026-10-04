@@ -222,7 +222,10 @@ table.grid tr.sel td { background: color-mix(in srgb, var(--accent) 14%, transpa
 #graph .node { cursor: pointer; }
 #graph .node.focus rect { stroke-width: 3; fill: color-mix(in srgb, var(--accent) 18%, var(--panel)); }
 #graph .node.dim { opacity: .25; }
-#graph path.e { fill: none; stroke: var(--muted); stroke-opacity: .45; stroke-width: 1.2; }
+#graph path.e { fill: none; stroke: var(--muted); stroke-opacity: .45; stroke-width: 1.2; pointer-events: none; }
+#gview.hl path.e:not(.hot) { stroke-opacity: .08; }
+#gview.hl .node:not(.near) { opacity: .25; }
+#gview.far text { display: none; }
 #graph path.e.jump { stroke-dasharray: 5 4; }
 #graph path.e.table { stroke-dasharray: 2 3; }
 #graph path.e.fallthrough { stroke-width: 2.4; stroke-opacity: .35; }
@@ -254,6 +257,7 @@ table.grid tr.sel td { background: color-mix(in srgb, var(--accent) 14%, transpa
 canvas.px { image-rendering: pixelated; image-rendering: crisp-edges; }
 .adetail { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
 .adetail > div:first-child { min-width: 0; max-width: 100%; }
+.adetail.wide > div:first-child { flex: 1 1 100%; } .adetail.wide .astage { display: block; }
 .astage { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: inline-block; max-width: 100%; overflow: auto; }
 .ameta { min-width: 260px; flex: 1; max-width: 560px; font-size: 13px; }
 .hexdump { font: 12px/1.5 var(--mono); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; overflow: auto; max-width: 100%; white-space: pre; }
@@ -333,6 +337,29 @@ table.kv td.m { font-family: var(--mono); word-break: break-all; }
 @media (max-width: 900px) { #mlist { display: none; } #mstrips { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* audio player */
+.card2 { display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap; }
+.card2 .cside { display: flex; flex-direction: column; gap: 12px; min-width: 180px; }
+.card2 .cimg { display: block; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px; color: var(--muted); text-decoration: none; }
+.card2 .cbody { flex: 1; min-width: min(520px, 100%); display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 6px 26px; align-items: start; }
+.card2 .cbody section.wide { grid-column: 1 / -1; }
+.card2 h4 { margin: 10px 0 6px; font: 600 13px var(--mono); color: var(--text); }
+.card2 p { margin: 0 0 8px; line-height: 1.5; }
+.card2 table.ctable th { text-align: left; font-weight: 600; padding: 4px 14px 4px 0; border-bottom: 1px solid var(--border); }
+.card2 table.ctable td:first-child { color: var(--text); }
+.cbars { display: grid; grid-template-columns: auto 3.5ch 1fr; gap: 5px 10px; align-items: center; font-size: 13px; }
+.cbars span { color: var(--muted); } .cbars b { font: 600 13px var(--mono); text-align: right; }
+.cbars i { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; } .cbars em { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.cchips { display: flex; flex-wrap: wrap; gap: 6px; } .cchips > span { border: 1px solid var(--border); border-radius: 12px; padding: 2px 9px; font-size: 12.5px; }
+.ctag { display: inline-block; border-radius: 4px; padding: 0 6px; font: 600 11.5px var(--mono); color: #fff; background: var(--tc, var(--muted)); }
+.csound { display: flex; flex-direction: column; gap: 2px; min-width: 200px; font-size: 12.5px; }
+.cprev { display: flex; justify-content: center; align-items: center; min-height: 60px; }
+.cprev .cimg { background: none; border: 0; padding: 0; }
+.msay { color: var(--text); font-family: var(--sans, system-ui, sans-serif); }
+.mnote { max-width: 760px; line-height: 1.5; } .mmore { color: var(--text); font-family: var(--sans, inherit); margin-top: 2px; white-space: pre-line; }
+table.mlist { margin-top: 14px; max-width: 900px; } table.mlist tr.on td { background: var(--panel2); } table.mlist td:first-child { color: var(--text); font-family: var(--mono); }
+.imark.hot { outline: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 25%, transparent); }
+table.ctable tr.hit td { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.tone.pos { color: var(--ok); font-weight: 600; } .tone.neg { color: var(--fail); font-weight: 600; } .tone.zero { color: var(--muted); text-decoration: line-through; } .tone.muted { color: var(--muted); }
 .player { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
 .player .pp { width: 34px; height: 34px; border-radius: 50%; padding: 0; flex: none; display: inline-flex; align-items: center; justify-content: center;
   background: var(--accent); border: none; color: var(--panel); cursor: pointer; }
@@ -484,7 +511,26 @@ function parseRomAddr(q) {
   const n = /^\s*\$?([0-9a-f]{4,5})\s*$/i.exec(q);
   return n ? parseInt(n[1], 16) : NaN;
 }
+if (Array.isArray(D.rommap)) D.rommap = D.rommap.map(([c, n]) => c.repeat(n)).join('');   // run-length coded
 const U = new Map(D.units.map(u => [u.n, u]));
+// a unit's listing, pseudo-code, verify result and view live in gen/c/<u.c>.js (one file per folder),
+// loaded the first time something shows them
+const CHUNKS = new Map();
+window.GBC = (i, body) => {
+  for (const [n, f] of Object.entries(body)) { const u = U.get(n); if (u) Object.assign(u, f); }
+  const w = CHUNKS.get(i); if (w) { w.ok = true; w.done(); }
+};
+function loadChunk(i) {
+  let w = CHUNKS.get(i);
+  if (!w) {
+    w = {ok: false}; w.p = new Promise(res => { w.done = res; }); CHUNKS.set(i, w);
+    const s = document.createElement('script'); s.src = 'gen/c/' + i + '.js';
+    s.onerror = () => { w.ok = true; w.done(); }; document.head.appendChild(s);
+  }
+  return w.p;
+}
+const isLoaded = u => !u || u.c === undefined || (CHUNKS.get(u.c) || {}).ok;
+const needUnits = us => Promise.all([...new Set(us.filter(u => u && u.c !== undefined).map(u => u.c))].map(loadChunk));
 const V = new Map(D.vars.map(v => [v.name, v]));
 const CODE_UNITS = D.units.filter(u => u.k === 'code');
 const ANN = D.units.filter(u => u.def);
@@ -520,8 +566,12 @@ $('#buildbadge').innerHTML = D.build.ok
   ? `<span class="dot" style="background:var(--ok)"></span>ROM matches · sha1 ${D.build.sha1.slice(0, 8)}`
   : `<span class="dot" style="background:var(--fail)"></span>build differs`;
 $('#buildbadge').title = D.build.msg;
-$('#names').innerHTML = [...D.units.map(u => u.n), ...D.vars.filter(v => v.type !== 'io').map(v => v.name)]
-  .map(n => `<option value="${esc(n)}">`).join('');
+// the search box's suggestions (16k names in a big game): built when the box is first used
+$('#search').addEventListener('focus', () => {
+  if ($('#names').childElementCount) return;
+  $('#names').innerHTML = [...D.units.map(u => u.n), ...D.vars.filter(v => v.type !== 'io').map(v => v.name)]
+    .map(n => `<option value="${esc(n)}">`).join('');
+}, {once: true});
 
 // ---------------------------------------------------------------- theme
 (function () {
@@ -951,7 +1001,14 @@ function route() {
   else if (view === 'music') renderMusic(arg);
   if (view !== 'music' && typeof musicStop === 'function' && music.playing) musicStop();
 }
-window.addEventListener('hashchange', route);
+// timings (ms) on <html data-…>: page script ready, and the last view's synchronous render
+const PERF = {start: performance.now()};
+function timedRoute() {
+  const t = performance.now();
+  route();
+  document.documentElement.dataset.render = Math.round(performance.now() - t);
+}
+window.addEventListener('hashchange', timedRoute);
 $('#search').addEventListener('change', e => {
   const n = e.target.value.trim();
   const ra = parseRomAddr(n), at = isNaN(ra) ? null : unitContaining(ra);
@@ -1077,6 +1134,11 @@ function codeAndComment(t, lang) {
 function renderCode(name) {
   if (!name || !U.has(name)) name = START;
   const u = U.get(name);
+  const hosts = (u.foreign || []).map(f => U.get(f.host));
+  if (!isLoaded(u) || !hosts.every(isLoaded)) {
+    needUnits([u, ...hosts]).then(() => { if (current.view === 'code' && (current.arg || START) === name) renderCode(name); });
+    return;
+  }
   renderFnList(name);
   const size = u.e - u.s;
   const st = statusOf(u);
@@ -1121,8 +1183,8 @@ function renderCode(name) {
     }).join('') + '</div>';
   } else if (u.k === 'data') {
     if (u.asset) {
-      $('#psrc').innerHTML = `<div class="placeholder"><b>Asset</b> (${esc(u.asset)}) — <a href="#/assets/${encodeURIComponent(u.n)}">open in Assets →</a><br><div class="astage" id="codeasset" style="margin-top:10px"></div></div>`;
-      const a = ASSETS.get(u.n);
+      $('#psrc').innerHTML = `<div class="placeholder"><b>Asset</b> (${esc(u.asset)}) — <a href="#/assets/${encodeURIComponent(u.an || u.n)}">open in Assets →</a><br><div class="astage" id="codeasset" style="margin-top:10px"></div></div>`;
+      const a = ASSETS.get(u.an || u.n);
       if (a) drawAsset(a, $('#codeasset'), 'large');
     } else
     $('#psrc').innerHTML = `<div class="placeholder">${u.table ? `<b>Jump table</b> with ${u.table.length} entries${G.jumpRst !== null && G.jumpRst !== undefined ? ` (used with <span class="kbd">rst $${G.jumpRst.toString(16).toUpperCase().padStart(2, '0')}</span>)` : ''}:<pre>${u.table.map((t, i) => `${String(i).padStart(2)}: ${hl(t, 'py')}`).join('\n')}</pre>` : (u.view ? '' : 'Data block — no pseudo-code.')}</div>`;
@@ -1338,11 +1400,16 @@ function parseStory(md) {
 }
 const STORY = D.intro ? parseStory(D.intro) : null;
 
+let bookObserver = null;
 function renderBook(arg) {
   // chapters = folders in reading order (numbered 1, 1.2, ...), functions in ROM order inside
   const fns = ANN.slice().sort((a, b) => a.s - b.s);
-  const direct = f => fns.filter(u => (u.p || '') === f);
-  const has = f => fns.some(u => inFolder(u.p, f));
+  const byDir = new Map();                      // folder -> its own functions, in ROM order
+  fns.forEach(u => { const p = u.p || ''; if (!byDir.has(p)) byDir.set(p, []); byDir.get(p).push(u); });
+  const nonEmpty = new Set();                   // folders with functions in them or below
+  for (const p of byDir.keys()) for (let f = p; f; f = parentOf(f)) nonEmpty.add(f);
+  const direct = f => byDir.get(f) || [];
+  const has = f => !f || nonEmpty.has(f);
   const numbers = new Map();
   (function number(f, prefix) {
     childFolders(f).filter(has).forEach((c, i) => { const n = prefix + (i + 1); numbers.set(c, n); number(c, n + '.'); });
@@ -1357,7 +1424,12 @@ function renderBook(arg) {
   const chapter = f => {
     const depth = f.split('/').length, tag = depth === 1 ? 'h2' : depth === 2 ? 'h3' : 'h4';
     return `<div class="bchap" id="ch-${esc(f)}"><${tag}><span class="no">${numbers.get(f)}</span>${esc(f.split('/').pop())}</${tag}>` +
-      (FOLDER_DESC.get(f) ? `<p>${esc(FOLDER_DESC.get(f))}</p>` : '') + '</div>' + direct(f).map(fnSection).join('');
+      (FOLDER_DESC.get(f) ? `<p>${esc(FOLDER_DESC.get(f))}</p>` : '') + '</div>' + fnSlot(f);
+  };
+  // a chapter's functions are drawn when it comes near the screen (estimated height until then)
+  const fnSlot = f => {
+    const us = direct(f);
+    return us.length ? `<div class="bfns" data-f="${esc(f)}" style="min-height:${us.length * 150}px"></div>` : '';
   };
   const storyToc = STORY ? `<a href="#/book/intro" class="chap" style="--d:0"><span class="no">0</span>${esc(STORY.title)}</a>` +
     STORY.sections.map(s => `<a href="#/book/${s.id}" class="sec" style="--d:1">${esc(s.t)}</a>`).join('') : '';
@@ -1370,9 +1442,23 @@ function renderBook(arg) {
     <b style="color:var(--text)">The ${esc(D.title)} pseudo-code book</b> — every annotated function, chapter by chapter (the folders of <span class="kbd">;@ path:</span>), in ROM order inside a chapter. Generated from the <span class="kbd">;@</span>/<span class="kbd">;></span> comments in the disassembly; the assembly stays the source of truth.
     Names link to their definitions; dotted names are helpers (hover for what they do). Parameters and results are bound to CPU registers (<span class="kbd">src: hl</span>).
     ${fns.length} functions, ${fns.filter(u => u.st === 'verified').length} verified by differential testing.</div>`;
-  $('#bookbody').innerHTML = intro + storyChapter + direct('').map(fnSection).join('') + order.map(chapter).join('');
+  $('#bookbody').innerHTML = intro + storyChapter + fnSlot('') + order.map(chapter).join('');
   $$('#bmode button').forEach(b => b.onclick = () => { bookMode = b.dataset.m; renderBook(); });
-  if (arg) { const el = document.getElementById('b-' + arg) || document.getElementById('ch-' + arg) || document.getElementById(arg); if (el) el.scrollIntoView(); }
+  const fill = el => {
+    if (el.dataset.done) return Promise.resolve();
+    el.dataset.done = '1';
+    const us = direct(el.dataset.f);
+    return needUnits(us).then(() => { el.innerHTML = us.map(fnSection).join(''); el.style.minHeight = ''; });
+  };
+  if (bookObserver) bookObserver.disconnect();
+  bookObserver = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) fill(e.target); }),
+    {root: $('#bookbody'), rootMargin: '1500px 0px'});
+  $$('#bookbody .bfns').forEach(el => bookObserver.observe(el));
+  if (arg) {
+    const go = () => { const el = document.getElementById('b-' + arg) || document.getElementById('ch-' + arg) || document.getElementById(arg); if (el) el.scrollIntoView(); };
+    const u = U.get(arg), slot = u ? [...$$('#bookbody .bfns')].find(x => x.dataset.f === (u.p || '')) : null;
+    if (slot) fill(slot).then(go); else go();
+  }
 }
 // following a link out of a function first points the URL at that function,
 // so the browser's back button returns to it
@@ -1583,13 +1669,24 @@ function renderGraph(arg, force) {
     svg += `<g class="node st-${statusOf(u)}${n === focus && gmode === 'nb' ? ' focus' : ''}" data-n="${esc(n)}" transform="translate(${c.x},${c.y})"><rect x="${-c.w / 2}" y="-13" width="${c.w}" height="26"/><text>${esc(n)}</text></g>`;
   }
   g.innerHTML = svg;
-  gstate = {mode: gmode, focus, depth: $('#gdepth').value, folder: $('#gfolder').value, coords, tx: 0, ty: 0, k: 1};
+  const idx = {node: new Map(), paths: new Map()};       // name -> its <g>, name -> its edges
+  for (const el of g.children) {
+    if (el.tagName === 'path') for (const k of [el.dataset.a, el.dataset.b]) { if (!idx.paths.has(k)) idx.paths.set(k, []); idx.paths.get(k).push(el); }
+    else idx.node.set(el.dataset.n, el);
+  }
+  gstate = {mode: gmode, focus, depth: $('#gdepth').value, folder: $('#gfolder').value, coords, idx, tx: 0, ty: 0, k: 1};
   fitGraph();
   $('#ginfo').style.display = 'none';
 }
-function applyView() { $('#gview').setAttribute('transform', `translate(${gstate.tx},${gstate.ty}) scale(${gstate.k})`); }
+function applyView() {
+  $('#gview').setAttribute('transform', `translate(${gstate.tx},${gstate.ty}) scale(${gstate.k})`);
+  $('#gview').classList.toggle('far', gstate.k < 0.35);     // names unreadable that small: don't draw them
+}
 function fitGraph() {
-  const box = $('#gview').getBBox(), el = $('#graph');
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;   // from the layout, not getBBox (slow on big graphs)
+  for (const c of gstate.coords.values()) { x0 = Math.min(x0, c.x - c.w / 2); x1 = Math.max(x1, c.x + c.w / 2); y0 = Math.min(y0, c.y - 13); y1 = Math.max(y1, c.y + 13); }
+  if (x0 === Infinity) { x0 = x1 = y0 = y1 = 0; }
+  const box = {x: x0, y: y0, width: x1 - x0, height: y1 - y0}, el = $('#graph');
   const k = Math.min(el.clientWidth / (box.width + 60), el.clientHeight / (box.height + 60), 1.4);
   gstate.k = k; gstate.tx = el.clientWidth / 2 - (box.x + box.width / 2) * k; gstate.ty = el.clientHeight / 2 - (box.y + box.height / 2) * k;
   applyView();
@@ -1615,17 +1712,21 @@ function fitGraph() {
   el.addEventListener('mouseout', e => { if (e.target.closest('.node')) highlightNode(gstate && gstate.sel || null, true); });
 })();
 function highlightNode(n) {
-  const near = new Set(n ? [n] : []);
-  $$('#gview path.e').forEach(p => {
-    const on = n && (p.dataset.a === n || p.dataset.b === n);
-    if (on) { near.add(p.dataset.a); near.add(p.dataset.b); }
-    p.classList.toggle('hot', !!on); p.classList.toggle('dim', !!n && !on);
-  });
-  $$('#gview .node').forEach(g => g.classList.toggle('dim', !!n && !near.has(g.dataset.n)));
+  // only the hovered function, its edges and its neighbours change class (a big graph has thousands)
+  const g = $('#gview'), idx = gstate && gstate.idx;
+  if (!idx) return;
+  (gstate.lit || []).forEach(el => el.classList.remove('hot', 'near'));
+  gstate.lit = [];
+  g.classList.toggle('hl', !!n);
+  if (!n) return;
+  const add = (el, c) => { if (el) { el.classList.add(c); gstate.lit.push(el); } };
+  add(idx.node.get(n), 'near');
+  for (const p of idx.paths.get(n) || []) { add(p, 'hot'); add(idx.node.get(p.dataset.a === n ? p.dataset.b : p.dataset.a), 'near'); }
 }
 function selectNode(n) {
   gstate.sel = n; highlightNode(n);
   const u = U.get(n);
+  if (!isLoaded(u)) needUnits([u]).then(() => { if (gstate.sel === n) selectNode(n); });   // its description
   $('#ginfo').style.display = 'block';
   $('#ginfo').innerHTML = `<div style="font:600 14px var(--mono)"><span class="dot st-${statusOf(u)}"></span> ${esc(n)}</div><div style="color:var(--muted)">${romAddr(u.s)} · ${u.e - u.s} bytes · ${STATUS_TEXT[u.st || 'none']}</div>` +
     (u.doc ? `<p>${u.doc.map(d => esc(d)).join(' ')}</p>` : '') +
@@ -1634,8 +1735,17 @@ function selectNode(n) {
 }
 
 // ---------------------------------------------------------------- RAM map
+// long tables: the first rows at once, the rest a batch per frame (a new render cancels the old batches)
+let rowsGen = 0;
+function appendRows(table, rows, batch = 400) {
+  const gen = ++rowsGen, body = table.tBodies[0] || table;
+  const step = i => { if (gen !== rowsGen || i >= rows.length) return;
+    body.insertAdjacentHTML('beforeend', rows.slice(i, i + batch).join('')); requestAnimationFrame(() => step(i + batch)); };
+  step(0);
+}
 function renderRam(sel) {
   const ram = D.vars.filter(v => v.type !== 'io');
+  const firstRows = sel ? Infinity : 200;          // a selected variable needs its row now (to scroll to it)
   const io = D.vars.filter(v => v.type === 'io');
   const owner = new Map();
   // SRAM banks share $A000-$BFFF: their bytes are keyed bank * $10000 + address
@@ -1661,19 +1771,21 @@ function renderRam(sel) {
         `<div><div class="srl">bank ${b}</div><canvas class="memcv" data-base="40960" data-bank="${b}" width="128" height="64"></canvas></div>`).join('')}</div></div>` : ''}
     </div>
     <h3>Named variables (${ram.length})</h3>
-    <table class="grid"><tr><th>address</th><th>name</th><th>type</th><th>description</th><th>read by</th><th>written by</th><th>address taken by</th></tr>${ram.map(row).join('')}</table>
+    <table class="grid" id="ramvars"><tr><th>address</th><th>name</th><th>type</th><th>description</th><th>read by</th><th>written by</th><th>address taken by</th></tr>${ram.slice(0, firstRows).map(row).join('')}</table>
     <h3>Referenced but unnamed (${D.unnamed.length})</h3>
     <p style="color:var(--muted);font-size:12.5px;max-width:900px">Addresses the code accesses directly that have no name yet. Name one with <span class="kbd">python tools/rename.py '$ffe5' hSomething u8 "description"</span> — the ROM is rebuilt and checked automatically.</p>
     <table class="grid"><tr><th>address</th><th>read by</th><th>written by</th><th>address taken by</th></tr>${D.unnamed.map(x => `<tr><td class="m">${hex4(x.addr)}</td><td>${accessCell(x.reads)}</td><td>${accessCell(x.writes)}</td><td>${accessCell(x.ptrs)}</td></tr>`).join('')}</table>
     <h3>Hardware registers used (${io.length})</h3>
     <table class="grid"><tr><th>address</th><th>name</th><th>read by</th><th>written by</th></tr>${io.map(v => `<tr id="ram-${esc(v.name)}" class="${v.name === sel ? 'sel' : ''}"><td class="m">${hex4(v.addr)}</td><td class="m">${esc(v.name)}</td><td>${accessCell(v.reads)}</td><td>${accessCell(v.writes)}</td></tr>`).join('')}</table>`;
   $$('#hram div[data-v]').forEach(d => d.onclick = () => location.hash = '#/ram/' + encodeURIComponent(d.dataset.v));
+  appendRows($('#ramvars'), ram.slice(firstRows).map(row));
+  const chk = cssVar('--chk');
   for (const cv of $$('#ram .memcv')) {
     const ctx = cv.getContext('2d'), base = +cv.dataset.base, bank = +cv.dataset.bank, sram = base === 0xA000;
     ctx.fillStyle = cssVar('--panel2'); ctx.fillRect(0, 0, 128, 64);
     for (let a = base; a < base + 0x2000; a++) {
       const o = owner.get(sramKey(bank, a)), un = sram ? null : unnamedAt.get(a); const i = a - base;
-      if (o) ctx.fillStyle = `hsla(${o.h},65%,50%,${o.v.name === sel ? 1 : .7})`; else if (un) ctx.fillStyle = cssVar('--chk'); else continue;
+      if (o) ctx.fillStyle = `hsla(${o.h},65%,50%,${o.v.name === sel ? 1 : .7})`; else if (un) ctx.fillStyle = chk; else continue;
       ctx.fillRect(i % 128, Math.floor(i / 128), 1, 1);
     }
     if (!sram) { cv.style.width = '512px'; cv.style.height = '256px'; }
@@ -1687,6 +1799,15 @@ function renderRam(sel) {
 
 // ---------------------------------------------------------------- assets
 const ASSETS = new Map((D.assets || []).map(a => [a.name, a]));
+// pixels, card sections and map marks live in gen/assets.js, loaded the first time an asset is drawn
+let assetsReady = !(D.assets || []).some(a => a.lazy), assetsWait = null;
+window.GBA = body => { for (const [n, f] of Object.entries(body)) { const a = ASSETS.get(n); if (a) Object.assign(a, f); } assetsReady = true; };
+function loadAssets() {
+  if (assetsReady) return Promise.resolve();
+  if (!assetsWait) assetsWait = new Promise(res => { const s = document.createElement('script'); s.src = 'gen/assets.js';
+    s.onload = s.onerror = () => { assetsReady = true; res(); }; document.head.appendChild(s); });
+  return assetsWait;
+}
 const PALETTES = {
   dmg: ['#e0f8d0', '#88c070', '#346856', '#081820'],
   grey: ['#ffffff', '#aaaaaa', '#555555', '#000000'],
@@ -1898,6 +2019,7 @@ function drawImage(a, el, size) {
   const inner = document.createElement('div');
   inner.style.cssText = 'position:relative;display:inline-block;line-height:0';
   inner.appendChild(c); wrap.appendChild(inner); el.appendChild(wrap);
+  if (a.link && large) { c.style.cursor = 'pointer'; c.title = ''; c.onclick = () => { location.hash = '#/assets/' + encodeURIComponent(a.link); }; }
   imagePixels(a).then(px => {
     const img = ctx.createImageData(W, H), pal = PALETTES[palName].map(hexRGB);
     for (let i = 0; i < W * H; i++) {
@@ -1908,14 +2030,30 @@ function drawImage(a, el, size) {
     ctx.putImageData(img, 0, 0);
   });
   if (!large || !a.marks || !a.marks.length) return;
+  // a mark: {x, y, w, h, label, text, link: asset name (or 'name@anchor'), linkText, more: longer text}
+  const sayHtml = m => m.say ? ` <span class="msay">${m.say.startsWith('(') || m.say.startsWith('talks to') ? esc(m.say) : '“' + esc(m.say) + '”'}</span>` : '';
+  const markHtml = m => `<b style="color:var(--text)">${esc(m.label)}</b>` + (m.text ? ' — ' + hl(m.text, 'doc') : '') + sayHtml(m) +
+    (m.link ? ` <a href="#/assets/${encodeURIComponent(m.link)}">${esc(m.linkText || 'open')} →</a>` : '') +
+    (m.more ? `<div class="mmore">${esc(m.more)}</div>` : '');
   const note = tipLine(el, 'Hover or click a marked spot.');
-  a.marks.forEach(m => {
+  note.className = 'mnote';
+  const btns = a.marks.map((m, i) => {
     const b = document.createElement('button');
-    b.className = 'imark'; b.title = m.label + (m.text ? ' — ' + m.text : '');
+    b.className = 'imark'; b.title = m.label + (m.text ? ' — ' + m.text : '') + (m.say ? ' “' + m.say + '”' : '') + (m.more ? '\n' + m.more : '');
     b.style.cssText = `left:${m.x * scale}px;top:${m.y * scale}px;width:${m.w * scale}px;height:${m.h * scale}px`;
-    b.onclick = () => { note.innerHTML = `<b style="color:var(--text)">${esc(m.label)}</b>` + (m.text ? ' — ' + hl(m.text, 'doc') : ''); };
+    if (!m.w || !m.h) return b;      // no spot on the picture (e.g. the map's wild Pokemon): only in the list
+    b.onclick = () => { note.innerHTML = markHtml(m); $$('.mlist tr', el).forEach((r, k) => r.classList.toggle('on', k === i)); };
     inner.appendChild(b);
+    return b;
   });
+  if (a.listMarks) {                  // every mark as a list under the picture
+    const list = document.createElement('table');
+    list.className = 'kv mlist';
+    list.innerHTML = a.marks.map(m => `<tr><td>${esc(m.label)}</td><td>${m.text ? hl(m.text, 'doc') : ''}${sayHtml(m)}${m.link ? ` <a href="#/assets/${encodeURIComponent(m.link)}">${esc(m.linkText || 'open')} →</a>` : ''}${m.more ? `<div class="mmore">${esc(m.more)}</div>` : ''}</td></tr>`).join('');
+    el.appendChild(list);
+    $$('tr', list).forEach((r, i) => r.addEventListener('mouseenter', () => { btns.forEach((b, k) => b.classList.toggle('hot', k === i)); }));
+    list.addEventListener('mouseleave', () => btns.forEach(b => b.classList.remove('hot')));
+  }
 }
 // a video of the game's own frames; lanes (button presses, events) scroll underneath in sync
 function drawVideo(a, el, size) {
@@ -2018,6 +2156,14 @@ function drawChart(a, el, size) {
 function tableCell(c) {
   if (c === null || c === undefined) return '';
   if (typeof c !== 'object') return esc(String(c));
+  if (Array.isArray(c)) return c.map(tableCell).join(' ');
+  if (c.tone) return `<span class="tone ${esc(c.tone)}">${tableCell(Object.assign({}, c, {tone: null}))}</span>`;
+  if (c.tag) return `<span class="ctag"${c.color ? ` style="--tc:${esc(c.color)}"` : ''}>${esc(c.tag)}</span>`;
+  if (c.asset) return `<a href="#/assets/${encodeURIComponent(c.asset)}">${esc(c.text || (ASSETS.get(c.asset) || {}).title || c.asset)}</a>`;
+  if (c.sound) {          // 'kind id' of a rendered sound: a player, and a link to its piano roll
+    const it = AUDIO.find(x => `${x.kind} ${x.id}` === c.sound);
+    return it ? `<div class="csound">${playerHtml(it.file, it.seconds)}<a href="#/music/${itemKey(it)}">${esc(c.text || 'piano roll')} →</a></div>` : `<span style="color:var(--muted)">${esc(c.text || c.sound)} (not rendered)</span>`;
+  }
   if (c.code) return `<a href="#/code/${encodeURIComponent(c.code)}">${esc(c.text || c.code)}</a>`;
   if (c.image) return `<span class="timg" data-img="${esc(JSON.stringify(c.image))}"></span>${c.text ? ' ' + esc(c.text) : ''}`;
   return esc(c.text || '');
@@ -2036,11 +2182,56 @@ function drawTracks(a, el, size) {
   el.insertAdjacentHTML('beforeend', `<div style="display:flex;flex-direction:column;gap:10px;min-width:min(560px,100%)">${a.tracks.map(t =>
     `<div><div style="display:flex;justify-content:space-between;gap:12px;font-size:13px"><b>${esc(t.title)}</b><span style="color:var(--muted)">${esc(t.note || '')}</span></div>${playerHtml(t.file, t.seconds)}</div>`).join('')}</div>`);
 }
+// a sheet of facts about one thing (an encyclopedia page): pictures on the left, sections on the right.
+// images: [asset name | image dict]; sections: [{title, fields: [[label, cell]]} | {title, bars: [[label, value, max]]}
+// | {title, columns, rows} | {title, text: [paragraphs]} | {title, chips: [cell]}]; cells as in tables.
+// x: an asset name or an image dict; {asset, link, caption}: that asset's picture, opening `link` (or nothing)
+function cardImage(x, el, scale) {
+  const spec = typeof x === 'string' ? {asset: x, link: x, caption: true} : x.asset ? x : {image: x};
+  const a = spec.asset ? ASSETS.get(spec.asset) : spec.image;
+  if (!a) return;
+  const box = document.createElement(spec.link ? 'a' : 'div');
+  box.className = 'cimg';
+  if (spec.link) box.href = '#/assets/' + encodeURIComponent(spec.link);
+  el.appendChild(box);
+  drawImage(Object.assign({}, a, {scale, marks: null, link: null}), box, 'large');
+  if (spec.caption) tipLine(box, typeof spec.caption === 'string' ? spec.caption : a.title || '');
+}
+function cardSection(s, size) {
+  const head = s.title ? `<h4>${esc(s.title)}</h4>` : '';
+  if (s.fields) return head + `<table class="kv cfields">${s.fields.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${tableCell(v)}</td></tr>`).join('')}</table>`;
+  if (s.bars) return head + `<div class="cbars">${s.bars.map(([k, v, max]) => `<span>${esc(k)}</span><b>${v}</b><i><em style="width:${Math.min(100, 100 * v / (max || 255)).toFixed(1)}%"></em></i>`).join('')}</div>`;
+  if (s.text) return head + s.text.map(t => `<p>${hl(t, 'doc')}</p>`).join('');
+  if (s.chips) return head + `<div class="cchips">${s.chips.map(c => `<span>${tableCell(c)}</span>`).join('')}</div>`;
+  if (s.rows) return head + (s.rows.length ? `<table class="kv ctable"><tr>${s.columns.map(c => `<th>${esc(c)}</th>`).join('')}</tr>${s.rows.map((r, i) => `<tr${s.ids && s.ids[i] ? ` id="a-${esc(s.ids[i])}"` : ''}>${r.map(c => `<td>${tableCell(c)}</td>`).join('')}</tr>`).join('')}</table>` : `<p style="color:var(--muted)">${esc(s.empty || 'none')}</p>`);
+  return '';
+}
+function drawCard(a, el, size) {
+  const imgs = a.images || [];
+  if (size !== 'large') {
+    const row = document.createElement('div'); row.className = 'cprev';
+    el.appendChild(row);
+    imgs.slice(0, 1).forEach(x => cardImage(x, row, 1));
+    if (!imgs.length && a.summary) row.insertAdjacentHTML('beforeend', `<span style="color:var(--muted);font-size:12px">${esc(a.summary)}</span>`);
+    return;
+  }
+  const wrap = document.createElement('div'); wrap.className = 'card2';
+  const side = document.createElement('div'); side.className = 'cside';
+  imgs.forEach(x => cardImage(x, side, a.scale || 3));
+  if (a.sound) side.insertAdjacentHTML('beforeend', tableCell({sound: a.sound, text: a.soundText}));
+  const body = document.createElement('div'); body.className = 'cbody';
+  body.innerHTML = (a.sections || []).map(s => `<section${s.wide ? ' class="wide"' : ''}>${cardSection(s, size)}</section>`).join('');
+  if (imgs.length || a.sound) wrap.appendChild(side);
+  wrap.appendChild(body);
+  el.appendChild(wrap);
+  $$('.timg', body).forEach(s => drawImage(Object.assign({scale: 2}, JSON.parse(s.dataset.img)), s, 'large'));
+}
 function drawError(a, el) { el.innerHTML = `<span class="badv">${esc(a.error || 'failed')}</span>`; }
 const RENDERERS = {tiles: drawTiles, tilemap: drawTilemap, logo: drawLogo, header: drawHeader, sprites: drawSprites, oam: drawOAM,
-  image: drawImage, video: drawVideo, chart: drawChart, table: drawTable, tracks: drawTracks, error: drawError};
+  image: drawImage, video: drawVideo, chart: drawChart, table: drawTable, tracks: drawTracks, card: drawCard, error: drawError};
 const TYPE_TEXT = {tiles: 'tile sheets', tilemap: 'tilemaps', logo: 'logo', header: 'cartridge header', sprites: 'sprites', oam: 'sprite layouts'};
 function drawAsset(a, el, size) {
+  if (a.lazy && !assetsReady) { loadAssets().then(() => drawAsset(a, el, size)); return; }
   if (a.error) { el.innerHTML = `<span class="badv">${esc(a.error)}</span>`; return; }
   const f = RENDERERS[a.type];
   if (f) f(a, el, size); else el.innerHTML = `<span style="color:var(--muted)">no renderer for "${esc(a.type)}" yet</span>`;
@@ -2130,7 +2321,11 @@ const player = (function () {
 const PAL_TYPES = new Set(['tiles', 'tilemap', 'sprites', 'oam', 'logo', 'image']);
 const usesPalette = list => list.some(a => PAL_TYPES.has(a.type) || (a.type === 'table' && (a.rows || []).some(r => r.some(c => c && c.image))));
 function renderAssets(sel) {
+  if (!assetsReady) { loadAssets().then(() => { if (current.view === 'assets') renderAssets(sel); }); return; }
   player.stop();
+  let anchor = null;
+  if (sel && sel.includes('@')) [sel, anchor] = sel.split('@');
+  if (anchor) setTimeout(() => { const t = document.getElementById('a-' + anchor); if (t) { t.scrollIntoView({block: 'center'}); t.classList.add('hit'); } }, 50);
   const root = $('#assets');
   const palBtns = `<span class="seg" id="palsel">${Object.keys(PALETTES).map(k => `<button data-p="${k}" class="${k === palName ? 'on' : ''}">${k === 'dmg' ? 'DMG green' : 'grey'}</button>`).join('')}</span>`;
   if (sel && ASSETS.has(sel) && ASSETS.get(sel).generated) {
@@ -2138,8 +2333,8 @@ function renderAssets(sel) {
     const users = (a.users || []).length ? a.users.map(n => `<a class="chip" href="#/code/${encodeURIComponent(n)}">${esc(n)}</a>`).join(' ') : '<span style="color:var(--muted)">—</span>';
     root.innerHTML = `<p style="margin-top:0"><a href="#/assets">← all assets</a></p>
       <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;max-width:1400px"><div><h1 style="font:600 18px var(--mono);margin:0 0 4px">${esc(a.title || a.name)} <span class="badge">${esc(a.type)}</span></h1>
-      <div style="color:var(--muted);font-size:12.5px;margin-bottom:12px">made by the game's asset plugin ${esc(a.generated)}</div></div><span class="spacer"></span>${usesPalette([a]) ? palBtns : ''}</div>
-      <div class="adetail"><div><div class="astage" id="astage"></div></div>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:12px">${esc(a.source || a.subtitle || '')}</div></div><span class="spacer"></span>${usesPalette([a]) ? palBtns : ''}</div>
+      <div class="adetail${a.type === 'card' ? ' wide' : ''}"><div><div class="astage" id="astage"></div></div>
         <div class="ameta">${(a.doc || []).map(d => `<p style="margin-top:0">${hl(d, 'doc')}</p>`).join('')}
           <table class="kv"><tr><td>code</td><td>${users}</td></tr></table></div></div>`;
     drawAsset(a, $('#astage'), 'large');
@@ -2165,11 +2360,11 @@ function renderAssets(sel) {
     const audio = (D.audio && D.audio.items) || [];
     const sections = order.map(type => ({key: type, label: TYPE_TEXT[type] || type, count: groups[type].length,
       html: `<h3>${esc(TYPE_TEXT[type] || type)} (${groups[type].length})</h3><div class="agrid">${groups[type].map(a =>
-        `<a class="acard" href="#/assets/${encodeURIComponent(a.name)}"><div class="pv" data-a="${esc(a.name)}"></div><div class="cap"><b>${esc(a.title || a.name)}</b><div>${a.generated ? esc(a.subtitle || a.type) : `${hex4(a.start)} · ${a.length} bytes`}</div></div></a>`).join('')}</div>`}));
+        `<a class="acard" href="#/assets/${encodeURIComponent(a.link || a.name)}"><div class="pv" data-a="${esc(a.name)}"></div><div class="cap"><b>${esc(a.title || a.name)}</b><div>${a.generated ? esc(a.subtitle || a.type) : `${hex4(a.start)} · ${a.length} bytes`}</div></div></a>`).join('')}</div>`}));
     const kinds = [...new Set(audio.map(a => a.kind))];
     if (kinds.length) sections.push({key: 'audio', label: 'music & sound', count: audio.length,
       html: `<h3>Music &amp; sound effects (${audio.length})</h3>
-      <p style="color:var(--muted);max-width:1000px;margin-top:0">Recorded from the game's own sound engine (InitSound, then the request, then UpdateSound at the rate the game runs it), every write to the sound registers goes into a model of the Game Boy APU, and ffmpeg encodes the result. Songs are rendered once through and loop from their loop point (↻). The <a href="#/music">Music</a> view shows each one as a piano roll with mute / solo per channel.</p>` +
+      <p style="color:var(--muted);max-width:1000px;margin-top:0">Played by the game's own sound engine: the request, then the engine's update at the rate the game runs it; what it writes to the sound registers is what you hear. Songs are rendered once through and loop from their loop point (↻). The <a href="#/music">Music</a> view shows each one as a piano roll with mute / solo per channel.</p>` +
       kinds.map(k => `<div style="font-weight:600;margin:14px 0 6px">${kindText[k]}</div><div class="agrid">${audio.filter(a => a.kind === k).map(a =>
         `<div class="acard" style="padding:10px 12px;gap:6px"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-family:var(--mono)">${k} $${a.id.toString(16).toUpperCase().padStart(2, '0')}</b><span style="color:var(--muted);font-size:12px">${a.loop !== null && a.loop !== undefined ? '↻ ' : ''}${a.seconds} s · <a href="#/music/${itemKey(a)}">piano roll →</a></span></div>
          <div style="font-size:13px">${esc(a.name)}</div><div style="color:var(--muted);font-size:12px">requested by ${hl(a.usedBy, 'doc')}</div>
@@ -2177,7 +2372,7 @@ function renderAssets(sel) {
     if (!sections.some(s => s.key === assetCat)) assetCat = 'all';
     const menu = `<span class="seg" id="acats"><button data-c="all" class="${assetCat === 'all' ? 'on' : ''}">all</button>${sections.map(s =>
       `<button data-c="${esc(s.key)}" class="${assetCat === s.key ? 'on' : ''}">${esc(s.label)} <span style="color:var(--muted)">${s.count}</span></button>`).join('')}</span>`;
-    root.innerHTML = `<p style="color:var(--muted);margin:0 0 10px;max-width:1000px">Data marked with <span class="kbd">;@ asset: &lt;type&gt;</span> in the disassembly, rendered straight from the ROM bytes. Tilemaps use the tiles the game itself loads, by running its own loading routine. Replays, recordings and charts come from the game's asset plugins.</p>
+    root.innerHTML = `<p style="color:var(--muted);margin:0 0 10px;max-width:1000px">The game's graphics and data, drawn straight from the ROM bytes. Screens use the tiles the game itself loads.</p>
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-width:1400px">${menu}<span class="spacer"></span>${usesPalette((D.assets || []).filter(a => assetCat === 'all' || (a.generated ? a.group : a.type) === assetCat)) ? palBtns : ''}</div>` +
       sections.filter(s => assetCat === 'all' || s.key === assetCat).map(s => s.html).join('');
     $$('.pv[data-a]', root).forEach(el => drawAsset(ASSETS.get(el.dataset.a), el, 'small'));
@@ -2672,7 +2867,8 @@ function trackerFollow(frame) {
 }
 new ResizeObserver(() => { if (current.view === 'music') drawMusic(true); }).observe($('#mstage'));
 
-route();
+timedRoute();
+document.documentElement.dataset.ready = Math.round(performance.now());   // since navigation: download, parse, first view
 </script>
 </body>
 </html>

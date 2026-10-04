@@ -22,6 +22,17 @@ Each asset is a dict made of the viewer's display parts (the `type`):
     table      {'columns': [...], 'rows': [[cell, ...], ...]}  cells: text, number, or
                 {'text', 'code': label} (links into the disassembly) / {'image': asset-like dict}
     tracks     {'tracks': [{'title', 'note', 'file', 'seconds'}]}  audio from ctx.audio(...)
+    card       a sheet about one thing (an encyclopedia page): {'images': [asset names or image dicts],
+                'sound': 'kind id' of a rendered sound (a player), 'summary' (gallery text without images),
+                'sections': [{'title', 'fields': [[label, cell]]} | {'title', 'bars': [[label, value, max]]}
+                | {'title', 'columns', 'rows', 'empty'} | {'title', 'text': [paragraphs]} | {'title', 'chips': [cell]}]}
+                ('wide': True spans a section over the whole sheet)
+
+Table and card cells: text, number, a list of cells, {'text', 'code': label}, {'asset': name, 'text'}
+(a link to another asset), {'sound': 'kind id'}, {'tag': text, 'color'}, {'text', 'tone': 'pos' | 'neg' |
+'zero' | 'muted'}, {'image': image dict}.
+
+'unit': a data label - the asset is drawn on that data block's page in the Code view too.
 
 plus the common fields: 'name' (unique), 'group' (the Assets menu entry, e.g. 'replays'),
 'title', 'doc' (list of paragraphs, may name labels), 'users' (labels of the code involved).

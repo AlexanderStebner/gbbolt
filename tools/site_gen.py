@@ -475,6 +475,56 @@ def data_views(project, paths):
     return mod.views(ctx)
 
 
+HEAVY = ('lines', 'res', 'groups', 'view', 'foreign', 'doc', 'hdr', 'refs')   # what only the Code page and the Book need
+ASSET_HEAVY = ('pixels', 'sections', 'doc', 'marks')     # what only drawing an asset needs
+
+
+def rle(s):
+    """'aaab' -> [['a', 3], ['b', 1]] (the ROM map: one letter per byte, in long runs)."""
+    out = []
+    for ch in s:
+        if out and out[-1][0] == ch:
+            out[-1][1] += 1
+        else:
+            out.append([ch, 1])
+    return out
+
+
+def write_asset_chunk(assets):
+    """The pixels / sections / marks of every asset into gen/assets.js, loaded when an asset is drawn."""
+    body = {}
+    for a in assets:
+        heavy = {k: a.pop(k) for k in ASSET_HEAVY if k in a}
+        if heavy:
+            body[a['name']] = heavy
+            a['lazy'] = 1
+    os.makedirs(os.path.join(OUT_DIR, 'gen'), exist_ok=True)
+    with open(os.path.join(OUT_DIR, 'gen', 'assets.js'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write('GBA({});\n'.format(json.dumps(body, separators=(',', ':'))))
+
+
+def write_chunks(units):
+    """Move the bulky per-unit fields out of the page into gen/c/<n>.js, one file per folder, so the page
+    starts with a small index and the viewer loads a folder's bodies when it shows them (a <script> tag,
+    which also works for a page opened from disk). u['c'] = the chunk number."""
+    import shutil
+    root = os.path.join(OUT_DIR, 'gen', 'c')
+    shutil.rmtree(root, ignore_errors=True)
+    os.makedirs(root)
+    groups = {}
+    for u in units:
+        body = {k: u.pop(k) for k in HEAVY if k in u}
+        if body:
+            groups.setdefault(u.get('p') or '', []).append((u, body))
+    for i, (folder, members) in enumerate(sorted(groups.items())):
+        chunk = {}
+        for u, body in members:
+            u['c'] = i
+            chunk[u['n']] = body
+        with open(os.path.join(root, '{}.js'.format(i)), 'w', encoding='utf-8', newline='\n') as f:
+            f.write('GBC({},{});\n'.format(i, json.dumps(chunk, separators=(',', ':'))))
+
+
 def read_intro():
     """src/intro.md: the Book's optional chapter 0, a short story from power-on to the first
     level told through the code (Markdown; `Name` links to a function, variable, asset or folder)."""
@@ -657,6 +707,13 @@ def generate(project):
     assets, tilesets = collect_assets(project)
     import assets as plugin_assets          # the game's own asset plugins (<game>/assets/*.py)
     assets += plugin_assets.collect(project, OUT_DIR)
+    by_name = {d['n']: d for d in units}
+    for a in assets:                        # a plugin asset that draws a data block ('unit': its label)
+        d = by_name.get(a.get('unit'))
+        if d is not None and 'asset' not in d:
+            d['asset'] = a['type']
+            if a['name'] != d['n']:
+                d['an'] = a['name']
 
     data = {
         'title': build.GAME.get('title') or build.rom_title(project.rom),
@@ -668,7 +725,7 @@ def generate(project):
         'generated': datetime.datetime.now().strftime('%Y-%m-%d %H:%M'),
         'build': {'ok': project.build_ok, 'msg': project.build_msg, 'sha1': build.sha1(build.BUILT)},
         'units': units,
-        'rommap': ''.join(rommap),
+        'rommap': rle(''.join(rommap)),
         'banked': bool(build.BANKED),
         'macros': collect_macros(project),
         'banks': banks,
@@ -685,6 +742,9 @@ def generate(project):
         'verifySeconds': round(project.verify_seconds, 1),
     }
     check_intro(data)
+    write_chunks(data['units'])
+    thumb_assets = [dict(a) for a in data['assets']]       # the thumbnail below needs the pixels
+    write_asset_chunk(data['assets'])
     html = open(TEMPLATE, encoding='utf-8').read()
     payload = json.dumps(data, separators=(',', ':')).replace('</', '<\\/')
     html = html.replace('/*__GBBOLT_DATA__*/null', payload)
@@ -693,7 +753,7 @@ def generate(project):
     open(path, 'w', encoding='utf-8', newline='\n').write(html)
     # a short summary for the hub page that lists all games
     funcs = [u for u in units if u['k'] == 'code']
-    thumb = write_thumbnail(assets, tilesets, os.path.join(OUT_DIR, 'thumb.png'))
+    thumb = write_thumbnail(thumb_assets, tilesets, os.path.join(OUT_DIR, 'thumb.png'))
     summary = {'id': build.GAME.get('id'), 'title': data['title'], 'sha1': data['build']['sha1'],
                'thumbnail': 'thumb.png' if thumb else None,
                'publisher': build.GAME.get('publisher'), 'year': build.GAME.get('year'),
