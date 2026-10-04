@@ -188,10 +188,6 @@ def _hw(name, what):
     return f
 
 
-def _goto(label):
-    raise NotModeled('jumps to {} inside the function (pseudo-code in the order of the assembly)'.format(label))
-
-
 def _bcd_to_int(x):
     n, mul = 0, 1
     while x:
@@ -267,8 +263,6 @@ def make_helpers(mem):
         'wait_vblank': (_hw('wait_vblank', 'polls rSTAT'), 'Busy-wait until the LCD is in VBlank (rSTAT mode 1)'),
         'wait_serial': (_hw('wait_serial', 'polls rSC'), 'Busy-wait until the link cable transfer is done (rSC bit 7 clear)'),
         'wait_div': (_hw('wait_div', 'polls rDIV'), 'Busy-wait on the divider rDIV, which counts up 16384 times a second'),
-        'goto': (_goto, "Continue at a local label of this function (`goto('.wrongAnswer')`): the pseudo-code "
-                        "follows the assembly's order, where a branch's code sits somewhere else"),
         'wait_vblank_flag': (_hw('wait_vblank_flag', 'waits for an interrupt'),
                              'Sleep until the VBlank interrupt has set hVBlankDone'),
         'read_buttons': (_hw('read_buttons', 'reads rP1'),
