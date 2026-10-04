@@ -448,6 +448,10 @@ def free_names(fn):
             for n in ast.walk(node.target):
                 if isinstance(n, ast.Name):
                     bound.add(n.id)
+        elif isinstance(node, (ast.FunctionDef, ast.Lambda)) and node is not fn:
+            if isinstance(node, ast.FunctionDef):     # a helper defined inside the pseudo-code
+                bound.add(node.name)
+            bound.update(a.arg for a in node.args.args + node.args.kwonlyargs)
     used = []
     for node in ast.walk(fn):
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id not in bound:
