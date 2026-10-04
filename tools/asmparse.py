@@ -250,7 +250,22 @@ def ram_from_labels(p):
             continue
         nxt = [lab[1] for lab in labs[i + 1:i + 40]
                if lab[1] > addr and lab[2] == bank and lab[1] >> 13 == addr >> 13]    # same bank and region
-        size = own or max(1, min(min(nxt) - addr if nxt else 1, 0x1000))    # `wFoo:: ds 30` says it itself
+        # an alias label right above another at the same address (`wCoordIndex::` over
+        # `wLoadedMonLevel:: db` in a UNION) has that one's size
+        alias = 0
+        if not own:
+            # a label alone on its line: the first data line below it (past other labels at the
+            # same address, comments and blanks) is what it names
+            for j in range(li + 1, min(li + 60, len(p.lines))):
+                ln = p.lines[j]
+                if ln.kind in ('blank', 'comment', 'header'):
+                    continue
+                if ln.kind == 'label' and ln.addr == addr:
+                    continue
+                if ln.kind == 'directive' and ln.addr == addr and ln.size and re.match(r'(?:db|dw|ds|dl)(?=\s|$)', ln.text, re.I):
+                    alias = ln.size
+                break
+        size = own or alias or max(1, min(min(nxt) - addr if nxt else 1, 0x1000))    # `wFoo:: ds 30` says it itself
         desc = []
         if cmt:
             desc.append(cmt.lstrip(';').strip())
@@ -415,6 +430,8 @@ def parse(src_dir, rom, syms):
             if ln.kind != 'label':
                 ln.kind = 'directive'
                 ln.text = stripped
+            if is_ram:
+                ln.size = here[2]                  # RAM data lines: the space they reserve
             if not is_ram and ln.kind != 'label':
                 attach(idx, ln)
             continue

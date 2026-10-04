@@ -55,6 +55,7 @@ def load_game():
     tm['stack_top'] = num(tm.get('stack_top'), 0xDF00)
     tm['stack_zone'] = [num(v, 0) for v in tm.get('stack_zone', ['0xDE00', '0xDF00'])]
     tm['free_ram'] = [num(v, 0) for v in tm.get('free_ram', ['0xC000', '0xDE00'])]
+    tm.setdefault('scratch', [])                # [label, size]: RAM verify never compares (leftover registers)
     return g
 
 

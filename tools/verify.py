@@ -24,6 +24,19 @@ FREE_RAM = build.GAME['test_memory']['free_ram']
 TRIALS = 64
 
 
+_SCRATCH = None
+
+
+def scratch_ram(env):
+    """Addresses of game.json's test_memory "scratch" ([label, size]): RAM that holds leftover register
+    values (pokered's wPredefHL/DE/BC), never compared."""
+    global _SCRATCH
+    if _SCRATCH is None:
+        _SCRATCH = {env.syms[name] + i for name, size in build.GAME['test_memory']['scratch']
+                    if name in env.syms for i in range(size)}
+    return _SCRATCH
+
+
 def reg_value(cpu, reg):
     if reg == 'carry':
         return bool(cpu.f & FC)
@@ -211,8 +224,9 @@ def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
         res.trials += 1
 
         diffs = []
+        scratch = scratch_ram(env)
         for a in range(0x8000, 0x10000):
-            if a in STACK_ZONE:
+            if a in STACK_ZONE or a in scratch:
                 continue
             if cpu.mem[a] != env.mem.data[a]:
                 diffs.append(a)

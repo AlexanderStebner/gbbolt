@@ -152,6 +152,19 @@ class Stub(int):
         raise NotModeled('calls {} which has no pseudo-code yet'.format(self.label))
 
 
+class Function(int):
+    """An annotated function as other pseudo-code sees it: calling it runs its pseudo-code;
+    in arithmetic it is its address, and BANK() gives its bank."""
+
+    def __new__(cls, name, address, bank, pyfunc):
+        obj = int.__new__(cls, address)
+        obj.label, obj.bank, obj.pyfunc = name, bank, pyfunc
+        return obj
+
+    def __call__(self, *a, **k):
+        return self.pyfunc(*a, **k)
+
+
 class JumpTableView:
     def __init__(self, entries, resolve):
         self.entries, self.resolve = entries, resolve
@@ -514,5 +527,11 @@ class Env:
         ast.fix_missing_locations(tree)
         code = compile(tree, '<pseudo {}>'.format(unit.name), 'exec')
         exec(code, self.globals)
-        self.compiled[unit.name] = (self.globals[fn.name], sig, unknown)
+        pyfn = self.globals[fn.name]
+        self.compiled[unit.name] = (pyfn, sig, unknown)
+        # other pseudo-code sees the function as its label too: callable, and a number in
+        # arithmetic or BANK() (`hl = GetTileAndCoordsInFrontOfPlayer`, `BANK(PlaySound)`)
+        import build
+        if fn.name in self.syms:
+            self.globals[fn.name] = Function(fn.name, self.syms[fn.name], build.SYM_BANK.get(fn.name), pyfn)
         return self.compiled[unit.name]
