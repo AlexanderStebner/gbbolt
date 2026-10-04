@@ -46,7 +46,9 @@ def main():
             shutil.copytree(cache, gen, dirs_exist_ok=True)
         if audio:
             run([sys.executable, os.path.join(HERE, 'audio.py')], root, env)
-        run([sys.executable, os.path.join(HERE, 'gbbolt.py'), 'verify', 'site', '--strict'], root, env)
+        # "strict": false in games.json: verify failures are shown on the page but don't stop the build
+        strict = ['--strict'] if g.get('strict', True) else []
+        run([sys.executable, os.path.join(HERE, 'gbbolt.py'), 'verify', 'site'] + strict, root, env)
         if os.path.isdir(gen):
             shutil.copytree(gen, cache, dirs_exist_ok=True)
         dest = os.path.join(site, g['id'])

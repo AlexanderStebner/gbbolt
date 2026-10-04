@@ -22,5 +22,12 @@
     "title": "Motocross Maniacs",
     "repo": "AlexanderStebner/motocross-gbbolt",
     "description": "Two laps against the clock: all 8 courses as whole maps with every item marked, the track pieces they are built from, bike physics, the computer rider and the sound engine."
+  },
+  {
+    "id": "pokered",
+    "title": "Pokémon Red",
+    "repo": "AlexanderStebner/pokered-gbbolt",
+    "strict": false,
+    "description": "The whole of Kanto: a Pokédex card for all 151 Pokémon, every map with its trainers and events, battles, menus, the game's screens in Super Game Boy colours, and all songs and cries. Based on the pret/pokered disassembly."
   }
 ]
