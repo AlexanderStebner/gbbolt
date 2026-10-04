@@ -116,7 +116,7 @@ def build(quiet=False):
         if r.returncode != 0:
             return False, 'prebuild failed:\n{}{}'.format(r.stdout, r.stderr)
     objs = [os.path.join(OUT, os.path.splitext(o)[0].replace('/', '_') + '.o') for o in GAME['objects']]
-    steps = [[tool('rgbasm')] + GAME['asm_flags'] + ['-I', SRC, '-s', 'equ:' + obj[:-2] + '.state', '-o', obj, o]
+    steps = [[tool('rgbasm')] + GAME['asm_flags'] + ['-I', SRC, '-s', 'equ,char:' + obj[:-2] + '.state', '-o', obj, o]
              for o, obj in zip(GAME['objects'], objs)]
     steps += [
         [tool('rgblink')] + GAME['link_flags'] + ['-n', SYM, '-m', os.path.join(OUT, 'game.map'), '-o', BUILT] + objs,
@@ -201,6 +201,26 @@ def read_sym():
         SYM_BANK[name] = int(bank, 16)
     BANKED = rom_size() > 0x8000
     return syms
+
+
+def read_charmap():
+    """byte -> the text the source writes for it (`rgbasm -s char:`; the first, shortest name
+    wins: "A" over an alias). Empty for games without a charmap."""
+    out = {}
+    for o in GAME['objects']:
+        path = os.path.join(OUT, os.path.splitext(o)[0].replace('/', '_') + '.state')
+        if not os.path.exists(path):
+            continue
+        for line in open(path, encoding='utf-8', errors='replace'):
+            m = re.match(r'^charmap\s+"((?:[^"\\]|\\.)*)",\s*\$([0-9A-Fa-f]+)\s*$', line)
+            if m:
+                b, s = int(m.group(2), 16), m.group(1).replace('\\"', '"').replace('\\\\', '\\')
+                rank = lambda x: (any(ord(ch) >= 0x3000 for ch in x), len(x))    # noqa: E731 - kana last
+                if b not in out or rank(s) < rank(out[b]):
+                    out[b] = s
+        if out:
+            break
+    return out
 
 
 def read_consts():

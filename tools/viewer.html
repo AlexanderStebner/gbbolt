@@ -182,6 +182,22 @@ h3 { font-size: 14px; margin: 26px 0 8px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 #asrc .ln.dir .tx { color: var(--muted); }
+.k-mac { color: var(--accent); text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+.k-mn[title] { cursor: help; text-decoration: underline dotted color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
+.mexp { margin: 2px 0 6px calc(4.2em + 7.5em); border-left: 3px solid var(--accent); background: var(--panel2); border-radius: 0 8px 8px 0; padding: 6px 10px; font: 12.5px var(--mono); }
+body.banked .mexp { margin-left: calc(6.6em + 7.5em); }
+.mexp-h { color: var(--muted); font-family: var(--sans); margin-bottom: 4px; }
+.mexp-h span { float: right; font-family: var(--mono); font-size: 11.5px; }
+.mexp-l { white-space: pre-wrap; }
+.tview { padding: 14px 16px; }
+.thead { font: 600 12.5px var(--sans); color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.tbox { white-space: pre-wrap; font: 15px/1.7 var(--mono); background: var(--screen, #e0f8d0); color: #10301c; border: 3px double #305838; border-radius: 6px; padding: 8px 14px; margin: 0 0 10px; max-width: 26ch; min-width: 20ch; }
+.tname { background: rgba(48, 88, 56, .14); border-radius: 3px; padding: 0 3px; color: #1d5a33; text-decoration: none; }
+.tarrow { color: #305838; margin-left: 6px; } .tend { color: #305838; margin-left: 6px; font-size: 11px; }
+.tctl { color: #6a5a20; font-size: 12.5px; }
+.tfar { border-left: 2px solid var(--border); padding-left: 10px; margin: 0 0 8px; }
+.tfrom { font: 12px var(--sans); color: var(--muted); margin-bottom: 6px; }
+.tnote { font: 13px var(--sans); color: var(--muted); margin: 4px 0 10px; }
 .srams { display: grid; grid-template-columns: repeat(2, 256px); gap: 10px; }
 .srams canvas { width: 256px; height: 128px; image-rendering: pixelated; border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; display: block; }
 .srl { font: 12px var(--mono); color: var(--muted); margin-bottom: 3px; }
@@ -523,6 +539,221 @@ $('#names').innerHTML = [...D.units.map(u => u.n), ...D.vars.filter(v => v.type 
 })();
 
 // ---------------------------------------------------------------- highlighting
+// ---------------------------------------------------------------- text views
+// what a text block prints, as decoded by the game's view plugin: characters, line and
+// paragraph breaks, names and numbers filled in from RAM, text continued in other banks
+function textView(v) {
+  let html = '', open = 0;
+  const box = s => `<div class="tbox">${s}</div>`;
+  let cur = '';
+  const flush = () => { if (cur) { html += box(cur); cur = ''; } };
+  for (const tk of v.t) {
+    if (typeof tk === 'string') { cur += esc(tk); continue; }
+    const [k, a, b] = tk;
+    if (k === 'br') cur += '\n';
+    else if (k === 'para') { flush(); }
+    else if (k === 'prompt') { cur += '<span class="tarrow" title="waits for a button, then the text box closes and the game goes on">▼</span>'; flush(); }
+    else if (k === 'done') { cur += '<span class="tend" title="end of the text box">■</span>'; flush(); }
+    else if (k === 'wait') cur += '<span class="tarrow" title="waits for a button">▼</span>';
+    else if (k === 'name') cur += `<span class="tname" title="filled in by the game">${esc(a)}</span>`;
+    else if (k === 'ram') cur += V.has(a) ? `<a class="tname" href="#/ram/${encodeURIComponent(a)}" title="the text stored at ${esc(a)}">${esc(a)}</a>` : `<span class="tname">${esc(a)}</span>`;
+    else if (k === 'num') cur += `<a class="tname" href="#/ram/${encodeURIComponent(a)}" title="the number at ${esc(a)} (${esc(b)})">#${esc(a)}</a>`;
+    else if (k === 'dots') cur += '…'.repeat(a);
+    else if (k === 'pause') cur += '<span class="tctl" title="a short pause">⋯</span>';
+    else if (k === 'sound') cur += `<span class="tctl">♪ ${esc(a)}</span>`;
+    else if (k === 'far') { flush(); open++; html += `<div class="tfar"><div class="tfrom">text in ${U.has(a) ? `<a href="#/code/${encodeURIComponent(a)}">${esc(a)}</a>` : esc(a)} · ${esc(romAddr(b))}</div>`; }
+    else if (k === 'farend') { flush(); if (open) { open--; html += '</div>'; } }
+    else if (k === 'asm') { flush(); html += '<div class="tnote">then assembly code runs (text_asm): see the listing</div>'; }
+    else if (k === 'script') { flush(); html += `<div class="tnote">runs the shared ${esc(a)} script</div>`; }
+    else cur += `<span class="tctl">${esc(a || k)}</span>`;
+  }
+  flush();
+  while (open-- > 0) html += '</div>';
+  return `<div class="tview"><div class="thead">What this text block shows</div>${html}</div>`;
+}
+
+// ---------------------------------------------------------------- instruction help
+// Every word in the assembly explains itself: SM83 instructions (what this form does,
+// which flags it changes), assembler directives, and macros (their description and
+// what this very line expands to).
+const R8 = new Set(['a', 'b', 'c', 'd', 'e', 'h', 'l']);
+const R16 = new Set(['bc', 'de', 'hl', 'sp', 'af']);
+const CC = {z: 'the zero flag is set (the last result was 0 / the compared values were equal)', nz: 'the zero flag is clear (the last result was not 0 / the values differed)',
+  c: 'the carry flag is set (the last addition overflowed, subtraction or compare went below 0)', nc: 'the carry flag is clear'};
+function asmOperands(s) {
+  const out = []; let cur = '', depth = 0, q = false;
+  for (const ch of s) {
+    if (ch === '"') q = !q;
+    if (!q && (ch === '(' || ch === '[')) depth++;
+    if (!q && (ch === ')' || ch === ']')) depth--;
+    if (ch === ',' && !q && depth === 0) { out.push(cur.trim()); cur = ''; } else cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+function opKind(o) {
+  const l = (o || '').toLowerCase().replace(/\s+/g, '');
+  if (R8.has(l)) return 'r';
+  if (R16.has(l)) return 'rr';
+  if (l === '[hl]') return '[hl]';
+  if (l === '[hli]' || l === '[hl+]') return '[hli]';
+  if (l === '[hld]' || l === '[hl-]') return '[hld]';
+  if (l === '[bc]' || l === '[de]') return '[rr]';
+  if (l === '[c]' || l === '[$ff00+c]') return '[c]';
+  if (/^sp[+-]/.test(l)) return 'sp+e';
+  if (l.startsWith('[')) return '[n]';
+  return 'n';
+}
+const FLAGS = {
+  alu: 'Flags: Z if the result is 0; N cleared; H on a carry out of bit 3; C on a carry out of bit 7.',
+  sub: 'Flags: Z if the result is 0; N set; H on a borrow from bit 4; C on a borrow (the result went below 0).',
+  logic_and: 'Flags: Z if the result is 0; N and C cleared; H set.',
+  logic: 'Flags: Z if the result is 0; N, H and C cleared.',
+  inc: 'Flags: Z if the result is 0; N cleared; H on a carry out of bit 3; C unchanged.',
+  dec: 'Flags: Z if the result is 0; N set; H on a borrow from bit 4; C unchanged.',
+  none: 'Flags: unchanged.',
+  rot: 'Flags: Z if the result is 0; N and H cleared; C gets the bit shifted out.',
+  rota: 'Flags: Z, N and H cleared; C gets the bit shifted out.',
+};
+function asmHelp(line) {
+  const m = /^\s*([A-Za-z_][\w.]*)\s*(.*)$/.exec(line.split(';')[0]);
+  if (!m) return '';
+  const mn = m[1].toLowerCase(), ops = asmOperands(m[2]), [x, y] = ops, kx = opKind(x), ky = opKind(y);
+  const cond = c => CC[(c || '').toLowerCase()];
+  switch (mn) {
+    case 'ld':
+      if (kx === 'r' && ky === 'r') return `Copy register ${y} into ${x}. ${FLAGS.none}`;
+      if (kx === 'r' && ky === 'n') return `Load the value ${y} into register ${x}. ${FLAGS.none}`;
+      if (kx === 'r' && ky === '[hl]') return `Load the byte at the address in HL into ${x}. ${FLAGS.none}`;
+      if (kx === '[hl]' && ky === 'r') return `Store ${y} at the address in HL. ${FLAGS.none}`;
+      if (kx === '[hl]' && ky === 'n') return `Store the value ${y} at the address in HL. ${FLAGS.none}`;
+      if (kx === 'r' && ky === '[hli]') return `Load the byte at HL into A, then add 1 to HL (step through memory). ${FLAGS.none}`;
+      if (kx === '[hli]') return `Store A at HL, then add 1 to HL (step through memory). ${FLAGS.none}`;
+      if (kx === 'r' && ky === '[hld]') return `Load the byte at HL into A, then subtract 1 from HL. ${FLAGS.none}`;
+      if (kx === '[hld]') return `Store A at HL, then subtract 1 from HL. ${FLAGS.none}`;
+      if (kx === 'r' && ky === '[rr]') return `Load the byte at the address in ${y.replace(/[[\]]/g, '').toUpperCase()} into A. ${FLAGS.none}`;
+      if (kx === '[rr]') return `Store A at the address in ${x.replace(/[[\]]/g, '').toUpperCase()}. ${FLAGS.none}`;
+      if (kx === 'r' && ky === '[n]') return `Load the byte at address ${y.slice(1, -1)} into A. ${FLAGS.none}`;
+      if (kx === '[n]' && y && y.toLowerCase() === 'sp') return `Store the stack pointer (2 bytes) at ${x.slice(1, -1)}. ${FLAGS.none}`;
+      if (kx === '[n]') return `Store A at address ${x.slice(1, -1)}. ${FLAGS.none}`;
+      if (kx === 'rr' && x.toLowerCase() === 'sp' && y && y.toLowerCase() === 'hl') return `Point the stack pointer at the address in HL. ${FLAGS.none}`;
+      if (kx === 'rr' && ky === 'sp+e') return 'Set HL to the stack pointer plus a signed offset. Flags: Z and N cleared; H and C from adding the offset to the low byte of SP.';
+      if (kx === 'rr') return `Load the 16-bit value ${y} into the register pair ${x.toUpperCase()}. ${FLAGS.none}`;
+      if (kx === 'r' && ky === '[c]') return `Load A from the hardware register at $FF00 + C. ${FLAGS.none}`;
+      if (kx === '[c]') return `Store A in the hardware register at $FF00 + C. ${FLAGS.none}`;
+      break;
+    case 'ldi': return `Load / store through HL, then add 1 to HL. ${FLAGS.none}`;
+    case 'ldd': return `Load / store through HL, then subtract 1 from HL. ${FLAGS.none}`;
+    case 'ldh':
+      if (kx === 'r') return `Load A from the high-memory byte ${y.slice(1, -1)} ($FF00-$FFFF: hardware registers and HRAM; a shorter, faster form of ld). ${FLAGS.none}`;
+      return `Store A in the high-memory byte ${x.slice(1, -1)} ($FF00-$FFFF: hardware registers and HRAM; a shorter, faster form of ld). ${FLAGS.none}`;
+    case 'push': return `Save the register pair ${(x || '').toUpperCase()} on the stack (SP goes down by 2). ${FLAGS.none}`;
+    case 'pop': return `Take the top 2 bytes of the stack into ${(x || '').toUpperCase()} (SP goes up by 2).` + ((x || '').toLowerCase() === 'af' ? ' This also sets all flags from the stack.' : ' ' + FLAGS.none);
+    case 'add':
+      if (kx === 'rr' && x.toLowerCase() === 'hl') return `HL = HL + ${(y || '').toUpperCase()} (16-bit). Flags: Z unchanged; N cleared; H on a carry out of bit 11; C on a carry out of bit 15.`;
+      if (kx === 'rr' && x.toLowerCase() === 'sp') return 'Add a signed offset to the stack pointer. Flags: Z and N cleared; H and C from the low byte.';
+      return `A = A + ${ops.length > 1 ? y : x}. ${FLAGS.alu}`;
+    case 'adc': return `A = A + ${ops.length > 1 ? y : x} + the carry flag (adds the carry of a lower byte: multi-byte sums). ${FLAGS.alu}`;
+    case 'sub': return `A = A - ${ops.length > 1 ? y : x}. ${FLAGS.sub}`;
+    case 'sbc': return `A = A - ${ops.length > 1 ? y : x} - the carry flag (multi-byte subtraction). ${FLAGS.sub}`;
+    case 'and': return `A = A AND ${ops.length > 1 ? y : x}: keep only the bits set in both (masking). ${FLAGS.logic_and}` + (x && x.toLowerCase() === 'a' && ops.length === 1 ? ' With A itself: just sets the flags from A (zero test) and clears carry.' : '');
+    case 'or': return `A = A OR ${ops.length > 1 ? y : x}: bits set in either.` + (x && x.toLowerCase() === 'a' ? ' With A itself: a test whether A is 0.' : '') + ` ${FLAGS.logic}`;
+    case 'xor': return `A = A XOR ${ops.length > 1 ? y : x}: bits set in exactly one.` + (x && x.toLowerCase() === 'a' ? ' With A itself: the short way to set A to 0.' : '') + ` ${FLAGS.logic}`;
+    case 'cp': return `Compare A with ${ops.length > 1 ? y : x}: subtract without keeping the result, only the flags. Z: equal; C: A is smaller (unsigned). ${FLAGS.sub}`;
+    case 'inc': return kx === 'rr' ? `Add 1 to the register pair ${x.toUpperCase()}. ${FLAGS.none}` : `Add 1 to ${x === '[hl]' ? 'the byte at HL' : x}. ${FLAGS.inc}`;
+    case 'dec': return kx === 'rr' ? `Subtract 1 from the register pair ${x.toUpperCase()}. ${FLAGS.none} (Careful: dec of a pair does not set Z, so loops test it with ld a, c / or b.)` : `Subtract 1 from ${x === '[hl]' ? 'the byte at HL' : x}. ${FLAGS.dec}`;
+    case 'daa': return 'Decimal-adjust A after a BCD add or subtract, so each nibble stays a digit 0-9. Flags: Z if A is 0; H cleared; C set on a decimal carry.';
+    case 'cpl': return 'Flip every bit of A (A = A XOR $FF). Flags: N and H set; Z and C unchanged.';
+    case 'ccf': return 'Flip the carry flag. Flags: N and H cleared; Z unchanged.';
+    case 'scf': return 'Set the carry flag. Flags: N and H cleared; Z unchanged.';
+    case 'nop': return 'Do nothing for one cycle.';
+    case 'halt': return 'Stop the CPU until an interrupt happens (games use it to wait for the next VBlank and save power).';
+    case 'stop': return 'Stop the CPU and LCD until a button is pressed (very low power mode).';
+    case 'di': return 'Disable interrupts: none of the interrupt handlers (VBlank, timer, serial...) can run until ei.';
+    case 'ei': return 'Enable interrupts again (after the next instruction).';
+    case 'rlca': return `Rotate A left: bit 7 goes to bit 0 and to the carry flag. ${FLAGS.rota}`;
+    case 'rla': return `Rotate A left through the carry: the carry goes into bit 0, bit 7 into the carry. ${FLAGS.rota}`;
+    case 'rrca': return `Rotate A right: bit 0 goes to bit 7 and to the carry flag. ${FLAGS.rota}`;
+    case 'rra': return `Rotate A right through the carry: the carry goes into bit 7, bit 0 into the carry. ${FLAGS.rota}`;
+    case 'rlc': return `Rotate ${x} left: bit 7 goes to bit 0 and to the carry. ${FLAGS.rot}`;
+    case 'rl': return `Rotate ${x} left through the carry. ${FLAGS.rot}`;
+    case 'rrc': return `Rotate ${x} right: bit 0 goes to bit 7 and to the carry. ${FLAGS.rot}`;
+    case 'rr': return `Rotate ${x} right through the carry. ${FLAGS.rot}`;
+    case 'sla': return `Shift ${x} left (multiply by 2); bit 7 goes to the carry, bit 0 becomes 0. ${FLAGS.rot}`;
+    case 'sra': return `Shift ${x} right keeping bit 7 (a signed divide by 2); bit 0 goes to the carry. ${FLAGS.rot}`;
+    case 'srl': return `Shift ${x} right (an unsigned divide by 2); bit 0 goes to the carry, bit 7 becomes 0. ${FLAGS.rot}`;
+    case 'swap': return `Swap the two nibbles of ${x} ($AB becomes $BA). Flags: Z if 0; N, H and C cleared.`;
+    case 'bit': return `Test bit ${x} of ${y}: Z is set if the bit is 0. Flags: N cleared, H set, C unchanged.`;
+    case 'set': return `Set bit ${x} of ${y} to 1. ${FLAGS.none}`;
+    case 'res': return `Clear bit ${x} of ${y} to 0. ${FLAGS.none}`;
+    case 'jp':
+      if (ops.length === 1 && x.toLowerCase() === 'hl') return `Jump to the address in HL. ${FLAGS.none}`;
+      return ops.length > 1 ? `Jump to ${y} if ${cond(x)}; otherwise go on. ${FLAGS.none}` : `Jump to ${x} (does not come back). ${FLAGS.none}`;
+    case 'jr': return ops.length > 1 ? `Jump to ${y} if ${cond(x)}; otherwise go on (a short jump, at most 128 bytes away). ${FLAGS.none}` : `Jump to ${x} (a short jump, at most 128 bytes away). ${FLAGS.none}`;
+    case 'call': return ops.length > 1 ? `Call ${y} if ${cond(x)}: push the return address and jump; its ret comes back here. ${FLAGS.none}` : `Call ${x}: push the return address on the stack and jump there; its ret comes back to the next line. ${FLAGS.none}`;
+    case 'ret': return ops.length ? `Return to the caller if ${cond(x)}; otherwise go on. ${FLAGS.none}` : `Return to the caller (pop the return address from the stack). ${FLAGS.none}`;
+    case 'reti': return 'Return from an interrupt handler and enable interrupts again.';
+    case 'rst': return `Call the routine at the fixed address ${x} (a 1-byte call to one of 8 vectors in the first 64 bytes). ${FLAGS.none}`;
+  }
+  return DIRECTIVE_HELP[mn] || '';
+}
+const DIRECTIVE_HELP = {
+  db: 'Assembler: put these bytes into the ROM here (data, not instructions). Strings become bytes through the charmap.',
+  dw: 'Assembler: put these 16-bit words into the ROM (each stored low byte first).',
+  dl: 'Assembler: put these 32-bit values into the ROM.',
+  ds: 'Assembler: reserve this many bytes (filled with the given value, or 0; in RAM: just space for a variable).',
+  incbin: 'Assembler: put the bytes of this file into the ROM here (graphics converted from the PNG, compressed pictures...).',
+  section: 'Assembler: start a block of code or data and say where it goes (ROM0 = bank 0, ROMX = a switchable bank, WRAM0 / HRAM = RAM).',
+  endsection: 'Assembler: end of the current section.',
+  if: 'Assembler: assemble the lines below only if the condition holds (e.g. DEF(_RED): only in Pokémon Red).',
+  elif: 'Assembler: otherwise, if this condition holds...', else: 'Assembler: otherwise assemble these lines instead.', endc: 'Assembler: end of the IF block.',
+  rept: 'Assembler: repeat the lines up to ENDR this many times.', for: 'Assembler: repeat the lines up to ENDR, once for each value of the variable.', endr: 'Assembler: end of the repeated block.',
+  load: 'Assembler: the code below is stored here in ROM but written as if it ran at another address (it gets copied there and runs from there, e.g. HRAM).',
+  endl: 'Assembler: end of the LOAD block.',
+  def: 'Assembler: define a constant (a name for a number or text; puts nothing in the ROM).', redef: 'Assembler: change the value of an assembler variable.',
+  assert: 'Assembler: check a condition at build time (the build fails if it does not hold); nothing goes into the ROM.',
+  static_assert: 'Assembler: check a condition at build time; nothing goes into the ROM.',
+  union: 'Assembler: the blocks up to ENDU share the same memory (different uses of the same bytes at different times).', nextu: 'Assembler: the next alternative use of the same memory.', endu: 'Assembler: end of the UNION.',
+  export: 'Assembler: make these names visible to the other files of the build.', align: 'Assembler: move on to the next address that is a multiple of this power of 2.',
+  charmap: 'Assembler: say which byte a character in strings stands for.', include: 'Assembler: read another source file here.',
+  macro: 'Assembler: define a macro: a name for a group of lines with parameters.', endm: 'Assembler: end of the macro definition.',
+  println: 'Assembler: print a message while building.', print: 'Assembler: print a message while building.', fail: 'Assembler: stop the build with an error.', warn: 'Assembler: print a warning while building.',
+};
+// macro lines: the macro's body with this line's arguments filled in
+function macroExpansion(mac, line) {
+  const m = /^\s*[A-Za-z_][\w.]*\s*(.*)$/.exec(line.split(';')[0]);
+  const args = asmOperands(m ? m[1] : '');
+  return mac.b.map(b => b.replace(/\\#/g, args.join(', ')).replace(/\\([1-9])/g, (_, i) => args[+i - 1] !== undefined ? args[+i - 1] : '\\' + i)
+    .replace(/\b_NARG\b/g, String(args.length)));
+}
+function mnemonicHtml(w, line) {
+  const mac = D.macros && D.macros[w.toLowerCase()];
+  if (mac) {
+    const exp = macroExpansion(mac, line).map(s => '    ' + s.trim()).filter(s => s.trim()).join('\n');
+    const tip = `macro ${mac.n}${mac.d ? ': ' + mac.d : ''}\n\nthis line expands to:\n${exp}\n\n(click to open the expansion)`;
+    return `<span class="k-mac" title="${esc(tip)}" data-mac="${esc(mac.n)}">${esc(w)}</span>`;
+  }
+  const help = asmHelp(line);
+  return help ? `<span class="k-mn" title="${esc(help)}">${esc(w)}</span>` : `<span class="k-mn">${esc(w)}</span>`;
+}
+// click a macro name: the expansion opens under the line (and closes again)
+document.addEventListener('click', e => {
+  const k = e.target.closest('.k-mac');
+  if (!k) return;
+  const ln = k.closest('.ln, .mexp-l, .bline');
+  if (!ln) return;
+  const next = ln.nextElementSibling;
+  if (next && next.classList.contains('mexp') && next.dataset.for === k.dataset.mac) { next.remove(); return; }
+  const mac = D.macros[k.dataset.mac.toLowerCase()];
+  const line = ln.querySelector('.tx') ? ln.querySelector('.tx').textContent : ln.textContent;
+  const body = macroExpansion(mac, line.trim()).filter(s => s.trim());
+  const box = document.createElement('div');
+  box.className = 'mexp'; box.dataset.for = mac.n;
+  box.innerHTML = `<div class="mexp-h">macro <b>${esc(mac.n)}</b>${mac.d ? ' — ' + esc(mac.d) : ''} <span>${esc(mac.f)}</span></div>` +
+    body.map(s => `<div class="mexp-l">${/^\s*;/.test(s) ? `<span class="k-com">${esc(s.trim())}</span>` : hl(s.trim(), 'asm')}</div>`).join('');
+  ln.after(box);
+});
+
 function ident(w, lang, first) {
   const base = w.startsWith('.') ? w : w.split('.')[0];
   if (lang === 'py' && PYKW.has(w)) return `<span class="k-kw">${w}</span>`;
@@ -550,7 +781,7 @@ function hl(text, lang) {
       let w = m[4], tail = '';
       if (lang === 'asm' && /[+-]$/.test(w) && w.length > 1) { tail = w.slice(-1); w = w.slice(0, -1); }
       const prose = lang === 'doc' && D.helpers[w] !== undefined && text[re.lastIndex] !== '(';   // "all", "list" in a sentence
-      out += (prose ? esc(w) : ident(w, lang, first)) + esc(tail); first = false;
+      out += (lang === 'asm' && first ? mnemonicHtml(w, text) : prose ? esc(w) : ident(w, lang, first)) + esc(tail); first = false;
     }
     else out += esc(m[0]);
   }
@@ -894,7 +1125,8 @@ function renderCode(name) {
       const a = ASSETS.get(u.n);
       if (a) drawAsset(a, $('#codeasset'), 'large');
     } else
-    $('#psrc').innerHTML = `<div class="placeholder">${u.table ? `<b>Jump table</b> with ${u.table.length} entries${G.jumpRst !== null && G.jumpRst !== undefined ? ` (used with <span class="kbd">rst $${G.jumpRst.toString(16).toUpperCase().padStart(2, '0')}</span>)` : ''}:<pre>${u.table.map((t, i) => `${String(i).padStart(2)}: ${hl(t, 'py')}`).join('\n')}</pre>` : 'Data block — no pseudo-code.'}</div>`;
+    $('#psrc').innerHTML = `<div class="placeholder">${u.table ? `<b>Jump table</b> with ${u.table.length} entries${G.jumpRst !== null && G.jumpRst !== undefined ? ` (used with <span class="kbd">rst $${G.jumpRst.toString(16).toUpperCase().padStart(2, '0')}</span>)` : ''}:<pre>${u.table.map((t, i) => `${String(i).padStart(2)}: ${hl(t, 'py')}`).join('\n')}</pre>` : (u.view ? '' : 'Data block — no pseudo-code.')}</div>`;
+    if (u.view && u.view.kind === 'text') $('#psrc').innerHTML = textView(u.view);
   } else {
     $('#psrc').innerHTML = `<div class="placeholder"><b>No pseudo-code yet.</b><br>Add a header above the label and <span class="kbd">;></span> lines between the instructions in <span class="kbd">${esc(u.file || '')}</span>, then run <span class="kbd">python tools/gbbolt.py</span>. A starting point from the static analysis:<pre>${esc(headerTemplate(u))}</pre></div>`;
   }

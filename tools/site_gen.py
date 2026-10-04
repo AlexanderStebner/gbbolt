@@ -397,6 +397,84 @@ def write_png(path, width, height, rgb_rows):
     open(path, 'wb').write(png)
 
 
+def collect_macros(project):
+    """Every macro the source defines: name (lower case) -> {n: name, b: body lines, d: what
+    its comments say, f: file}. The viewer explains and expands macro lines with it."""
+    import measure
+    texts = []
+    for f in sorted(measure.prelude_files()):
+        texts.append((f, open(os.path.join(build.SRC, f), encoding='utf-8', errors='replace').read().split('\n')))
+    by_file = {}
+    for ln in project.parsed.lines:
+        by_file.setdefault(ln.file, []).append(ln.raw)
+    texts += sorted(by_file.items())
+    out = {}
+    for fname, lines in texts:
+        i = 0
+        while i < len(lines):
+            code = measure.code_part(lines[i]).strip()
+            m = re.match(r'^MACRO\??\s+(\w+)', code, re.I) or re.match(r'^(\w+):?\s+MACRO\b', code, re.I)
+            if not m:
+                i += 1
+                continue
+            doc, j = [], i - 1
+            while j >= 0 and lines[j].strip().startswith(';') and not lines[j].strip().startswith(';@'):
+                doc.insert(0, lines[j].strip().lstrip(';').strip())
+                j -= 1
+            tail = lines[i].split(';', 1)
+            if len(tail) > 1 and tail[1].strip():
+                doc.append(tail[1].strip())
+            body, depth, i = [], 1, i + 1
+            while i < len(lines) and depth:
+                c = measure.code_part(lines[i]).strip()
+                if re.match(r'^MACRO\b', c, re.I):
+                    depth += 1
+                elif re.match(r'^ENDM\b', c, re.I):
+                    depth -= 1
+                    if not depth:
+                        break
+                body.append(lines[i].rstrip().replace('\t', '    '))
+                i += 1
+            while body and body[0].strip().startswith(';'):          # leading comments describe it
+                doc.append(body.pop(0).strip().lstrip(';').strip())
+            out.setdefault(m.group(1).lower(), {'n': m.group(1), 'b': body, 'd': ' '.join(d for d in doc if d), 'f': fname})
+            i += 1
+    return out
+
+
+def data_views(project, paths):
+    """Views a game plugin gives its data blocks (game.json "views": a Python file whose
+    `views(ctx)` returns {unit name: view}), e.g. the text a text block prints."""
+    path = build.GAME.get('views')
+    if not path:
+        return {}
+    import importlib.util
+    import types
+    spec = importlib.util.spec_from_file_location('game_views', os.path.join(build.ROOT, path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    p = project.parsed
+    units = []
+    for u in p.units:
+        units.append(types.SimpleNamespace(
+            name=u.name, start=u.start, end=u.end, kind=u.kind, path=paths.get(u.name, ''),
+            lines=[(p.lines[i].macro or (p.lines[i].text.split() or [''])[0].lower(), p.lines[i].text, p.lines[i].addr, p.lines[i].size)
+                   for i in u.lines if p.lines[i].kind in ('insn', 'data')]))
+    by_start = {}
+    for u in units:
+        by_start.setdefault(u.start, u.name)
+    rev = {}
+    for name, a in project.syms.items():
+        if '.' not in name and not name.startswith('__gb_'):
+            rev.setdefault((build.SYM_BANK.get(name, 0), a), name)
+    ctx = types.SimpleNamespace(
+        rom=project.rom, units=units, unit_named={u.name: u for u in units}, unit_starting=by_start.get,
+        syms=project.syms, bank=build.SYM_BANK, linear=build.linear, fmt_rom=build.fmt_rom,
+        charmap=build.read_charmap(), consts=p.consts, vars=p.vars,
+        label=lambda bank, addr: rev.get((bank, addr)) or rev.get((0, addr)))
+    return mod.views(ctx)
+
+
 def read_intro():
     """src/intro.md: the Book's optional chapter 0, a short story from power-on to the first
     level told through the code (Markdown; `Name` links to a function, variable, asset or folder)."""
@@ -493,6 +571,10 @@ def generate(project):
     paths = unit_paths(project)
     for d in units:
         d['p'] = paths.get(d['n'], '')
+    views = data_views(project, paths)
+    for d in units:
+        if d['n'] in views:
+            d['view'] = views[d['n']]
 
     rommap = ['d'] * len(project.rom)
     for u in p.units:
@@ -588,6 +670,7 @@ def generate(project):
         'units': units,
         'rommap': ''.join(rommap),
         'banked': bool(build.BANKED),
+        'macros': collect_macros(project),
         'banks': banks,
         'vars': variables,
         'unnamed': unnamed,

@@ -373,7 +373,19 @@ def parse(src_dir, rom, syms):
                 ln.addr = None
             elif (is_unit_label(name, colons) or (any_colon and not name.startswith('.') and colons)) \
                     and s.in_section and not full.startswith('__gb_'):
+                # comments directly above the label (no blank line between) describe this unit,
+                # not the end of the one before
+                moved = []
+                if unit is not None:
+                    while unit.lines and p.lines[unit.lines[-1]].kind in ('comment', 'header'):
+                        moved.insert(0, unit.lines.pop())
+                    if moved and all(p.lines[i].kind == 'header' for i in moved):
+                        unit.lines += moved                  # only header lines: as before
+                        moved = []
                 unit = Unit(full, idx)
+                for i in moved:
+                    p.lines[i].group = 0
+                unit.lines += moved
                 unit.start = unit.end = ln.addr
                 unit.header = pending_header
                 pending_header = []

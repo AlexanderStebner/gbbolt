@@ -190,13 +190,13 @@ def show(project, names):
 def main():
     """Commands run in order on one loaded project, verifying at most once:
     `gbbolt.py` = fixheaders verify stamp site; `gbbolt.py verify Name...` tests only those."""
-    args = [a for a in sys.argv[1:] if a != '--strict'] or ['all']
+    args = [a for a in sys.argv[1:] if a not in ('--strict', '--nobuild')] or ['all']
     strict = '--strict' in sys.argv            # exit code 1 if anything fails (for CI)
     steps = [a for a in args if a in COMMANDS]
     names = set(a for a in args if a not in COMMANDS)
     if steps == ['all']:
         steps = ['fixheaders', 'verify', 'stamp', 'site']
-    project = Project()
+    project = Project(rebuild='--nobuild' not in sys.argv)   # --nobuild: use the ROM the last build made
     print(project.build_msg)
     if not project.build_ok:
         sys.exit(1)
