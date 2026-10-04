@@ -1813,13 +1813,17 @@ const PALETTES = {
   grey: ['#ffffff', '#aaaaaa', '#555555', '#000000'],
 };
 let palName = localStorage.getItem('gbbolt.palette') || 'dmg';
+// 'color': images that carry their own colours ('colors': a list of '#rrggbb', indexed by the pixel value) show
+// them; everything else stays DMG green. A pixel value above 3 picks a colour beyond the first four (several
+// palettes in one picture); without colours it is shade (value & 3).
+const curPal = () => PALETTES[palName] || PALETTES.dmg;
 const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const tilesetCache = {};
 const tileset = key => tilesetCache[key] || (tilesetCache[key] = D.tilesets[key] ? b64(D.tilesets[key]) : null);
 const BGP = (b => [0, 1, 2, 3].map(c => (b >> (2 * c)) & 3))(G.bgp !== undefined && G.bgp !== null ? G.bgp : 0xE4);   // the game's BG palette (game.json bgp, default $E4)
 const hexRGB = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 function blitTile(img, W, px, py, data, off, bpp) {
-  const pal = PALETTES[palName].map(hexRGB);
+  const pal = curPal().map(hexRGB);
   for (let y = 0; y < 8; y++) {
     const lo = data[off + (bpp === 1 ? y : 2 * y)] || 0, hi = bpp === 1 ? lo : (data[off + 2 * y + 1] || 0);
     for (let x = 0; x < 8; x++) {
@@ -1879,7 +1883,7 @@ function drawLogo(a, el, size) {
   // 48 bytes = 48x8 pixels in two halves of 24 bytes; each byte is two 4-pixel rows, high nibble first
   const data = b64(a.bytes);
   const c = makeCanvas(48, 8, size === 'large' ? 10 : 4), ctx = c.getContext('2d');
-  const pal = PALETTES[palName];
+  const pal = curPal();
   ctx.fillStyle = pal[0]; ctx.fillRect(0, 0, 48, 8); ctx.fillStyle = pal[3];
   for (let half = 0; half < 2; half++) for (let i = 0; i < 24; i++) {
     const b = data[half * 24 + i], x0 = (i >> 1) * 4, y0 = half * 4 + (i & 1) * 2;
@@ -1940,7 +1944,7 @@ function spriteCanvas(entries, ts, scale) {
   const W = Math.max(...entries.map(e => e[1])) - minX + 8, H = Math.max(...entries.map(e => e[0])) - minY + 8;
   const c = makeCanvas(W, H, scale), ctx = c.getContext('2d');
   const img = ctx.createImageData(W, H);
-  const pal = PALETTES[palName].map(hexRGB);
+  const pal = curPal().map(hexRGB);
   for (const [y, x, tile, attr] of entries) {
     const obp = OBP[(attr >> 4) & 1];
     for (let r = 0; r < 8; r++) {
@@ -2021,7 +2025,9 @@ function drawImage(a, el, size) {
   inner.appendChild(c); wrap.appendChild(inner); el.appendChild(wrap);
   if (a.link && large) { c.style.cursor = 'pointer'; c.title = ''; c.onclick = () => { location.hash = '#/assets/' + encodeURIComponent(a.link); }; }
   imagePixels(a).then(px => {
-    const img = ctx.createImageData(W, H), pal = PALETTES[palName].map(hexRGB);
+    const img = ctx.createImageData(W, H), mono = curPal().map(hexRGB);
+    const own = a.colors && (a.fixedColors || palName === 'color') ? a.colors.map(hexRGB) : null;
+    const pal = own ? Array.from({length: 255}, (_, v) => own[v] || mono[v & 3]) : Array.from({length: 255}, (_, v) => mono[v & 3]);
     for (let i = 0; i < W * H; i++) {
       const v = px[i];
       if (v === 255) continue;
@@ -2194,7 +2200,7 @@ function cardImage(x, el, scale) {
   box.className = 'cimg';
   if (spec.link) box.href = '#/assets/' + encodeURIComponent(spec.link);
   el.appendChild(box);
-  drawImage(Object.assign({}, a, {scale, marks: null, link: null}), box, 'large');
+  drawImage(Object.assign({}, a, {scale, marks: null, link: null}, spec.colors && a.colors ? {fixedColors: true} : {}), box, 'large');
   if (spec.caption) tipLine(box, typeof spec.caption === 'string' ? spec.caption : a.title || '');
 }
 function cardSection(s, size) {
@@ -2327,7 +2333,9 @@ function renderAssets(sel) {
   if (sel && sel.includes('@')) [sel, anchor] = sel.split('@');
   if (anchor) setTimeout(() => { const t = document.getElementById('a-' + anchor); if (t) { t.scrollIntoView({block: 'center'}); t.classList.add('hit'); } }, 50);
   const root = $('#assets');
-  const palBtns = `<span class="seg" id="palsel">${Object.keys(PALETTES).map(k => `<button data-p="${k}" class="${k === palName ? 'on' : ''}">${k === 'dmg' ? 'DMG green' : 'grey'}</button>`).join('')}</span>`;
+  const shown = sel && ASSETS.has(sel.split('@')[0]) ? [ASSETS.get(sel.split('@')[0])] : (D.assets || []).filter(a => assetCat === 'all' || (a.generated ? a.group : a.type) === assetCat);
+  const palKeys = Object.keys(PALETTES).concat(shown.some(a => a.colors) ? ['color'] : []);
+  const palBtns = `<span class="seg" id="palsel">${palKeys.map(k => `<button data-p="${k}" class="${k === palName || (k === 'dmg' && !palKeys.includes(palName)) ? 'on' : ''}">${{dmg: 'DMG green', grey: 'grey', color: 'colour'}[k]}</button>`).join('')}</span>`;
   if (sel && ASSETS.has(sel) && ASSETS.get(sel).generated) {
     const a = ASSETS.get(sel);
     const users = (a.users || []).length ? a.users.map(n => `<a class="chip" href="#/code/${encodeURIComponent(n)}">${esc(n)}</a>`).join(' ') : '<span style="color:var(--muted)">—</span>';

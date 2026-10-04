@@ -15,6 +15,9 @@ Each asset is a dict made of the viewer's display parts (the `type`):
                'packed': 'zlib' with ctx.packed_pixels(rows) for big pictures; 'scale' (large view),
                'scroll': True (scrolls sideways), 'marks': [{'x', 'y', 'w', 'h', 'label', 'text'}]
                (pixels of the picture: boxes to hover / click, text may name labels)
+               'colors': ['#rrggbb', ...] the picture's own colours, indexed by pixel value (values above 3
+               pick further palettes in one picture; without colours a pixel shows as shade value & 3) -
+               shown when the viewer's palette is 'colour', always with 'fixedColors': True
     video      {'file': url from ctx.video(...), 'width', 'height', 'fps',
                 'lanes': [{'name', 'spans': [[from, to], ...]}]}   frame spans, drawn under the video
     chart      {'kind': 'line' | 'step' | 'bar', 'x': label, 'y': label, 'xticks': [...] optional,
@@ -22,7 +25,8 @@ Each asset is a dict made of the viewer's display parts (the `type`):
     table      {'columns': [...], 'rows': [[cell, ...], ...]}  cells: text, number, or
                 {'text', 'code': label} (links into the disassembly) / {'image': asset-like dict}
     tracks     {'tracks': [{'title', 'note', 'file', 'seconds'}]}  audio from ctx.audio(...)
-    card       a sheet about one thing (an encyclopedia page): {'images': [asset names or image dicts],
+    card       a sheet about one thing (an encyclopedia page): {'images': [asset names, image dicts, or
+                {'asset', 'link', 'caption', 'colors': True (in the asset's own colours)}],
                 'sound': 'kind id' of a rendered sound (a player), 'summary' (gallery text without images),
                 'sections': [{'title', 'fields': [[label, cell]]} | {'title', 'bars': [[label, value, max]]}
                 | {'title', 'columns', 'rows', 'empty'} | {'title', 'text': [paragraphs]} | {'title', 'chips': [cell]}]}
