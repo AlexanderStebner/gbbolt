@@ -117,6 +117,24 @@ def setup_namespace(data, rng, env):
             cpu.call(env.syms[cfg['update']])
 
     ns.update(to_bcd=lambda n: int(str(n), 16), rand_ram=rand_ram, rand_bcd=rand_bcd, fill_bcd=fill_bcd, rand=rand, play=play)
+
+    # ROM labels (numbers that know their bank, for BANK()), addr('Unit.local') for any label, and the
+    # game's own helpers (coord, set_event, ...) working on this test's memory
+    from pseudo import Function, game_helpers
+    for n, a in env.syms.items():
+        if '.' not in n and n not in ns:
+            ns[n] = Function(n, a, build.SYM_BANK.get(n), None)
+    ns['addr'] = lambda name: env.syms[name]
+
+    def bank_of(x):
+        if isinstance(x, str):
+            return build.SYM_BANK[x]
+        if getattr(x, 'bank', None) is not None:
+            return x.bank
+        raise ValueError('BANK() of a number: give the label')
+    ns['BANK'] = bank_of
+    for k, (f, _) in game_helpers(mem).items():
+        ns.setdefault(k, f)
     return ns
 
 
@@ -142,6 +160,35 @@ class Result:
                 'example': self.example, 'observed': self.observed}
 
 
+PSEUDO_SECONDS = 10                         # one trial of a function's pseudo-code may take this long
+
+
+class PseudoTimeout(Exception):
+    pass
+
+
+def run_limited(fn, args, seconds=PSEUDO_SECONDS):
+    """fn(**args), but a watchdog thread raises PseudoTimeout inside it after `seconds` (pseudo-code that
+    loops forever would otherwise hang the whole verify; Windows has no alarm signal)."""
+    import ctypes
+    import threading
+    tid, lock, state = threading.get_ident(), threading.Lock(), {'done': False}
+
+    def fire():
+        with lock:
+            if not state['done']:
+                ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_ulong(tid), ctypes.py_object(PseudoTimeout))
+    timer = threading.Timer(seconds, fire)
+    timer.daemon = True
+    timer.start()
+    try:
+        return fn(**args)
+    finally:
+        with lock:
+            state['done'] = True
+        timer.cancel()
+
+
 def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
     obs_in, obs_out, obs_rd, obs_wr = set(), set(), set(), set()
     params = sig.params
@@ -152,6 +199,9 @@ def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
         bank = build.bank_of(unit.start) if build.BANKED else 1
         if build.BANKED:                         # the function's own bank is switched in
             data[0x4000:0x8000] = rom[bank * 0x4000:(bank + 1) * 0x4000]
+        rbv = build.GAME['test_memory'].get('rom_bank_var')
+        if build.BANKED and rbv in env.syms:     # the game's "current ROM bank" variable says the same
+            data[env.syms[rbv]] = bank
         ns = setup_namespace(data, rng, env)
         svars = scalar_vars(env)
         try:
@@ -195,9 +245,13 @@ def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
         env.mem.mbc = MBC(rom, env.mem.data, bank) if build.BANKED else None
         env.mem.reads, env.mem.writes = set(), set()
         try:
-            ret = fn(**args)
+            ret = run_limited(fn, args)
         except NotModeled as e:
             res.skip = str(e)
+            return
+        except PseudoTimeout:
+            res.errors.append('pseudo-code did not finish within {} s in trial {} (an endless loop: waiting for something '
+                              'only an interrupt or the hardware changes?)'.format(PSEUDO_SECONDS, t))
             return
         except Exception as e:
             import traceback

@@ -308,17 +308,22 @@ def game_helpers(mem):
     path = build.GAME.get('helpers')
     if not path:
         return {}
-    import importlib.util
-    spec = importlib.util.spec_from_file_location('game_helpers', os.path.join(build.ROOT, path))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    cache = {}
+    if 'mod' not in _GAME_HELPERS:           # loaded once: verify asks for fresh helpers every trial
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('game_helpers', os.path.join(build.ROOT, path))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _GAME_HELPERS['mod'] = mod
+    cache = _GAME_HELPERS.setdefault('syms', {})
 
     def addr(name):
         if not cache:
             cache.update(build.read_sym())
         return cache[name]
-    return mod.helpers(mem, addr)
+    return _GAME_HELPERS['mod'].helpers(mem, addr)
+
+
+_GAME_HELPERS = {}
 
 
 HELPER_DOCS = {k: v[1] for k, v in make_helpers(Memory(bytearray(0x10000))).items()}

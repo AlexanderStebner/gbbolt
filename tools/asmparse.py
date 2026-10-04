@@ -245,6 +245,7 @@ def ram_from_labels(p):
     """RAM variables from the labels in RAM sections (pret style: `wFoo:: ds 2`, comments
     above or beside them). Size: up to the next label; arrays unless one byte."""
     labs = p.ram_labels
+    ends = {lab[0]: (lab[1], lab[2]) for lab in labs if lab[0].endswith('End')}
     for i, (name, addr, bank, cmt, li, own) in enumerate(labs):
         if name in p.vars:
             continue
@@ -253,7 +254,24 @@ def ram_from_labels(p):
         # an alias label right above another at the same address (`wCoordIndex::` over
         # `wLoadedMonLevel:: db` in a UNION) has that one's size
         alias = 0
+        # a container label over its fields (`wShadowOAM::` over `wShadowOAMSprite00YCoord::`, `wPartyMons::`
+        # over `wPartyMon1Species::`): up to its End label, or over the run of labels that extend its name
         if not own:
+            end = ends.get(name + 'End') or (ends.get(name[:-5] + 'End') if name.endswith('Start') else None)
+            if end and end[1] == bank and end[0] > addr:
+                alias = end[0] - addr
+            else:
+                # its fields: names that extend it (wBattleMon -> wBattleMonHP), or for a plural the
+                # numbered members (wPartyMons -> wPartyMon1Species, but not wPartyMonOT)
+                field = re.compile(re.escape(name) + r'.' + ('|' + re.escape(name[:-1]) + r'\d' if name.endswith('s') else ''))
+                same = lambda lab: lab[2] == bank and lab[1] >> 13 == addr >> 13      # noqa: E731
+                k = i + 1
+                while k < len(labs) and same(labs[k]) and field.match(labs[k][0]) \
+                        and (k > i + 1 or labs[k][1] == addr):
+                    k += 1
+                if k > i + 1:
+                    alias = (labs[k][1] if k < len(labs) and same(labs[k]) else labs[k - 1][1] + 1) - addr
+        if not own and not alias:
             # a label alone on its line: the first data line below it (past other labels at the
             # same address, comments and blanks) is what it names
             for j in range(li + 1, min(li + 60, len(p.lines))):
