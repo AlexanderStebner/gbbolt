@@ -116,7 +116,7 @@ def build(quiet=False):
         if r.returncode != 0:
             return False, 'prebuild failed:\n{}{}'.format(r.stdout, r.stderr)
     objs = [os.path.join(OUT, os.path.splitext(o)[0].replace('/', '_') + '.o') for o in GAME['objects']]
-    steps = [[tool('rgbasm')] + GAME['asm_flags'] + ['-I', SRC, '-s', 'equ,char:' + obj[:-2] + '.state', '-o', obj, o]
+    steps = [[tool('rgbasm')] + GAME['asm_flags'] + ['-I', SRC, '-s', 'equ,equs,char:' + obj[:-2] + '.state', '-o', obj, o]
              for o, obj in zip(GAME['objects'], objs)]
     steps += [
         [tool('rgblink')] + GAME['link_flags'] + ['-n', SYM, '-m', os.path.join(OUT, 'game.map'), '-o', BUILT] + objs,
@@ -225,7 +225,7 @@ def read_charmap():
 
 def read_consts():
     """Every numeric constant the assembler knew (`rgbasm -s equ:`), name -> value."""
-    out = {}
+    out, strings = {}, {}
     for o in GAME['objects']:
         path = os.path.join(OUT, os.path.splitext(o)[0].replace('/', '_') + '.state')
         if not os.path.exists(path):
@@ -234,7 +234,43 @@ def read_consts():
             m = re.match(r'^def\s+(\w+)\s+equ\s+\$([0-9A-Fa-f]+)\s*$', line, re.I)
             if m:
                 out.setdefault(m.group(1), int(m.group(2), 16))
+                continue
+            m = re.match(r'^def\s+(\w+)\s+equs\s+"(.*)"\s*$', line, re.I)
+            if m:
+                strings.setdefault(m.group(1), m.group(2))
+    # EQUS constants that are number expressions over labels and constants
+    # (pokered: MUSIC_PALLET_TOWN is "((Music_PalletTown - SFX_Headers_1) / 3)")
+    syms = {}
+    if os.path.exists(SYM):
+        for line in open(SYM):
+            m = re.match(r'^[0-9a-fA-F]+:([0-9a-fA-F]+) (\w+)\s*$', line)
+            if m:
+                syms[m.group(2)] = int(m.group(1), 16)
+    for name, expr in strings.items():
+        if not re.fullmatch(r'[\w\s()+\-*/%$<>&|^~]+', expr):
+            continue
+        py = re.sub(r'\$([0-9A-Fa-f]+)', r'0x\1', expr).replace('/', '//')
+        try:
+            v = eval(py, {'__builtins__': {}}, _Lookup(out, syms))
+        except Exception:
+            continue
+        if isinstance(v, int):
+            out.setdefault(name, v)
     return out
+
+
+class _Lookup(dict):
+    """Names in a constant expression: constants first, then label addresses."""
+    def __init__(self, consts, syms):
+        super().__init__()
+        self.consts, self.syms = consts, syms
+
+    def __missing__(self, k):
+        if k in self.consts:
+            return self.consts[k]
+        if k in self.syms:
+            return self.syms[k]
+        raise KeyError(k)
 
 
 def read_map():
