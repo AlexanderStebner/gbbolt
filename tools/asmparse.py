@@ -243,7 +243,8 @@ def ram_from_labels(p):
     for i, (name, addr, bank, cmt, li, own) in enumerate(labs):
         if name in p.vars:
             continue
-        nxt = [lab[1] for lab in labs[i + 1:i + 40] if lab[1] > addr]
+        nxt = [lab[1] for lab in labs[i + 1:i + 40]
+               if lab[1] > addr and lab[2] == bank and lab[1] >> 13 == addr >> 13]    # same bank and region
         size = own or max(1, min(min(nxt) - addr if nxt else 1, 0x1000))    # `wFoo:: ds 30` says it itself
         desc = []
         if cmt:

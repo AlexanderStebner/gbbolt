@@ -8,7 +8,7 @@
 <style>
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --panel2: #f0f2f5; --border: #d9dde4; --text: #1d2330; --muted: #5d6678;
-  --accent: #2563eb; --ok: #1a7f37; --chk: #9a6700; --fail: #cf222e; --stale: #8250df; --codec: #a9b8d3; --datac: #e3e6eb;
+  --accent: #2563eb; --ok: #1a7f37; --chk: #9a6700; --fail: #cf222e; --stale: #8250df; --codec: #a9b8d3; --datac: #e3e6eb; --emptyc: #f6f7f9;
   --kw: #8250df; --num: #b35900; --com: #6e7781; --fn: #0550ae; --var: #8a5a00; --const: #0a7f8a; --reg: #c4314b; --mn: #2f7d32; --str: #0a7f8a;
   --tint: 0.13; --hot: 0.32;
   --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, Menlo, monospace;
@@ -17,14 +17,14 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0f1115; --panel: #161a21; --panel2: #1c212b; --border: #2a303c; --text: #d7dce5; --muted: #8a93a6;
-    --accent: #6aa9ff; --ok: #3fb950; --chk: #d29922; --fail: #f85149; --stale: #a371f7; --codec: #34445e; --datac: #232832;
+    --accent: #6aa9ff; --ok: #3fb950; --chk: #d29922; --fail: #f85149; --stale: #a371f7; --codec: #34445e; --datac: #232832; --emptyc: #15181e;
     --kw: #c678dd; --num: #d19a66; --com: #6a7385; --fn: #61afef; --var: #e5c07b; --const: #56b6c2; --reg: #e06c75; --mn: #98c379; --str: #56b6c2;
     --tint: 0.11; --hot: 0.30;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0f1115; --panel: #161a21; --panel2: #1c212b; --border: #2a303c; --text: #d7dce5; --muted: #8a93a6;
-  --accent: #6aa9ff; --ok: #3fb950; --chk: #d29922; --fail: #f85149; --stale: #a371f7; --codec: #34445e; --datac: #232832;
+  --accent: #6aa9ff; --ok: #3fb950; --chk: #d29922; --fail: #f85149; --stale: #a371f7; --codec: #34445e; --datac: #232832; --emptyc: #15181e;
   --kw: #c678dd; --num: #d19a66; --com: #6a7385; --fn: #61afef; --var: #e5c07b; --const: #56b6c2; --reg: #e06c75; --mn: #98c379; --str: #56b6c2;
   --tint: 0.11; --hot: 0.30;
 }
@@ -116,6 +116,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 .src .ln[data-g] { cursor: pointer; }
 .ln .no { color: var(--muted); opacity: .55; width: 3.2em; text-align: right; padding-right: 12px; flex: none; user-select: none; }
 .ln .ad { color: var(--muted); width: 4.2em; flex: none; padding-left: 8px; user-select: none; }
+body.banked .ln .ad { width: 6.6em; }
 .ln .by { color: var(--muted); opacity: .75; width: 9.5em; flex: none; overflow: hidden; user-select: none; }
 .lines { width: max-content; min-width: 100%; }   /* every row as wide as the widest code */
 .ln .tx { flex: none; }
@@ -170,9 +171,21 @@ a.k-fn, a.k-var { text-decoration: none; } a.k-fn:hover, a.k-var:hover { text-de
 .bar { height: 8px; border-radius: 4px; background: var(--panel2); overflow: hidden; display: flex; margin-top: 8px; }
 .bar i { display: block; height: 100%; }
 h3 { font-size: 14px; margin: 26px 0 8px; }
+.banks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-width: 1200px; margin: 8px 0 4px; }
+.bank { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 8px; min-width: 0; }
+.bank .bh { display: flex; align-items: baseline; gap: 6px; font: 600 12.5px var(--mono); white-space: nowrap; }
+.bank .bh span { margin-left: auto; font: 11.5px var(--sans); color: var(--muted); }
+.bank .bs { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 2px 0 6px; }
+.bank canvas { width: 100%; aspect-ratio: 1; image-rendering: pixelated; display: block; border-radius: 4px; cursor: crosshair; }
+.bank.home { border-color: var(--accent); }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin: 6px 0; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+#asrc .ln.dir .tx { color: var(--muted); }
+.srams { display: grid; grid-template-columns: repeat(2, 256px); gap: 10px; }
+.srams canvas { width: 256px; height: 128px; image-rendering: pixelated; border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; display: block; }
+.srl { font: 12px var(--mono); color: var(--muted); margin-bottom: 3px; }
+#asrc .ln.off .tx, #asrc .ln.off .cm { color: var(--muted); opacity: .55; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent); }
 #rommap { image-rendering: pixelated; border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; max-width: 100%; }
 #maptip { font: 12.5px var(--mono); color: var(--muted); min-height: 1.4em; }
 table.grid { border-collapse: collapse; font-size: 12.5px; width: 100%; max-width: 1200px; }
@@ -197,6 +210,8 @@ table.grid tr.sel td { background: color-mix(in srgb, var(--accent) 14%, transpa
 #graph path.e.jump { stroke-dasharray: 5 4; }
 #graph path.e.table { stroke-dasharray: 2 3; }
 #graph path.e.fallthrough { stroke-width: 2.4; stroke-opacity: .35; }
+#graph path.e.far { stroke: var(--stale); stroke-opacity: .75; }
+.farleg { color: var(--stale); }
 #graph path.e.hot { stroke: var(--accent); stroke-opacity: 1; stroke-width: 2; }
 #graph path.e.dim { stroke-opacity: .08; }
 #ginfo { position: absolute; right: 12px; top: 12px; width: 280px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; display: none; max-height: calc(100% - 24px); overflow: auto; }
@@ -408,7 +423,7 @@ body.focus.drawer #sidebar { display: flex; position: fixed; left: 0; top: 0; bo
         <span class="spacer"></span>
         <div class="legend" style="margin:0">
           <span><i style="background:var(--ok)"></i>verified</span><span><i style="background:var(--chk)"></i>checked</span><span><i style="background:var(--fail)"></i>failing</span><span><i style="background:var(--codec)"></i>not annotated</span>
-          <span>— call</span><span>- - jump</span><span>··· table</span><span>━ falls through</span>
+          <span>— call</span><span>- - jump</span><span>··· table</span><span>━ falls through</span><span class="farleg" id="farleg" hidden>— far call (other bank)</span>
         </div>
         <button id="gfit">Fit</button>
       </div>
@@ -439,6 +454,20 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 const hex4 = a => '$' + a.toString(16).toUpperCase().padStart(4, '0');
+// a ROM place: its offset in the ROM file. Banked games show it as bank:address (0E:5A2F)
+const romBank = a => a < 0x4000 ? 0 : a >> 14;
+const romCpu = a => a < 0x4000 ? a : 0x4000 | (a & 0x3FFF);
+const romAddr = a => D.banked ? romBank(a).toString(16).toUpperCase().padStart(2, '0') + ':' + romCpu(a).toString(16).toUpperCase().padStart(4, '0') : hex4(a);
+const romShort = a => D.banked ? romAddr(a) : hex4(a).slice(1);
+// the unit holding a ROM place (units are in address order within a file, so search them all)
+function unitContaining(a) { return D.units.find(u => u.s <= a && a < u.e) || null; }
+// typed addresses: 0E:5A2F, $5A2F or 5a2f -> ROM place (NaN if it is not one)
+function parseRomAddr(q) {
+  const m = /^\s*([0-9a-f]{1,2}):\$?([0-9a-f]{1,4})\s*$/i.exec(q);
+  if (m) { const b = parseInt(m[1], 16), a = parseInt(m[2], 16); return a < 0x4000 ? a : b * 0x4000 + (a - 0x4000); }
+  const n = /^\s*\$?([0-9a-f]{4,5})\s*$/i.exec(q);
+  return n ? parseInt(n[1], 16) : NaN;
+}
 const U = new Map(D.units.map(u => [u.n, u]));
 const V = new Map(D.vars.map(v => [v.name, v]));
 const CODE_UNITS = D.units.filter(u => u.k === 'code');
@@ -499,7 +528,7 @@ function ident(w, lang, first) {
   if (lang === 'py' && PYKW.has(w)) return `<span class="k-kw">${w}</span>`;
   if (lang === 'c' && /^(if|else|for|while|return|break|continue|void|u8|u16|bool|true|false|NULL|goto)$/.test(w)) return `<span class="k-kw">${w}</span>`;
   if (lang === 'asm' && first) return `<span class="k-mn">${w}</span>`;
-  if (U.has(w)) return `<a class="k-fn" href="#/code/${encodeURIComponent(w)}" title="${esc(hex4(U.get(w).s))}">${w}</a>`;
+  if (U.has(w)) return `<a class="k-fn" href="#/code/${encodeURIComponent(w)}" title="${esc(romAddr(U.get(w).s))}">${w}</a>`;
   if (V.has(base)) { const v = V.get(base); return `<a class="k-var" href="#/ram/${encodeURIComponent(base)}" title="${esc(hex4(v.addr) + ' ' + v.type + (v.desc ? ' — ' + v.desc : ''))}">${esc(w)}</a>`; }
   if (D.consts[w]) return `<span class="k-const" title="${esc(hex4(D.consts[w].value) + (D.consts[w].doc ? ' — ' + D.consts[w].doc : ''))}">${w}</span>`;
   if (lang !== 'asm' && D.helpers[w] !== undefined && !['True', 'False', 'None'].includes(w)) return `<span class="k-help" title="${esc(D.helpers[w])}">${w}</span>`;
@@ -694,8 +723,10 @@ function route() {
 window.addEventListener('hashchange', route);
 $('#search').addEventListener('change', e => {
   const n = e.target.value.trim();
+  const ra = parseRomAddr(n), at = isNaN(ra) ? null : unitContaining(ra);
   if (U.has(n)) location.hash = '#/code/' + encodeURIComponent(n);
   else if (V.has(n)) location.hash = '#/ram/' + encodeURIComponent(n);
+  else if (at) location.hash = '#/code/' + encodeURIComponent(at.n) + '@' + ra.toString(16);
   e.target.value = '';
 });
 
@@ -705,7 +736,7 @@ let cardOpen = false;   // details section state, kept while navigating
 function renderFnList(sel) {
   const q = $('#fnfilter').value.toLowerCase();
   const list = D.units.filter(u => {
-    if (q && !u.n.toLowerCase().includes(q) && !hex4(u.s).toLowerCase().includes(q)) return false;
+    if (q && !u.n.toLowerCase().includes(q) && !romAddr(u.s).toLowerCase().includes(q)) return false;
     if (fnFilter === 'code') return u.k === 'code';
     if (fnFilter === 'todo') return u.k === 'code' && !u.def;
     if (fnFilter === 'data') return u.k === 'data';
@@ -713,7 +744,7 @@ function renderFnList(sel) {
   });
   const item = (u, d) =>
     `<a href="#/code/${encodeURIComponent(u.n)}" class="st-${statusOf(u)} ${u.k}${u.n === sel ? ' on' : ''}" style="--d:${d}" title="${esc(STATUS_TEXT[u.st || 'none'] || '')}">` +
-    `<span class="dot"></span><span class="ad">${hex4(u.s).slice(1)}</span><span class="nm">${esc(u.n)}</span></a>`;
+    `<span class="dot"></span><span class="ad">${romShort(u.s)}</span><span class="nm">${esc(u.n)}</span></a>`;
   if (sideMode === 'list') $('#fnlist').innerHTML = list.map(u => item(u, 0)).join('');
   else {
     // folders: open if remembered, if they hold the current unit, or while filtering
@@ -797,8 +828,8 @@ function showLineAt(addr) {
   let ln = null;
   for (const l of $$('#asrc .ln')) {
     const a = $('.ad', l);
-    if (!a || !a.textContent || l.classList.contains('lbl')) continue;
-    if (parseInt(a.textContent, 16) <= addr) ln = l; else break;
+    if (!a || !a.dataset.a || l.classList.contains('lbl')) continue;
+    if (+a.dataset.a <= addr) ln = l; else break;
   }
   if (!ln) return;
   $$('#asrc .ln.target').forEach(e => e.classList.remove('target'));
@@ -820,7 +851,7 @@ function renderCode(name) {
   const st = statusOf(u);
   const crumb = u.p ? `<div class="crumb">${u.p.split('/').map((s, i, a) => { const f = a.slice(0, i + 1).join('/'); return `<a href="#/book/${encodeURIComponent(f)}" title="${esc(FOLDER_DESC.get(f) || '')}">${esc(s)}</a>`; }).join(' / ')} /</div>` : '';
   let card = crumb + `<h1><span class="dot st-${st}"></span>${esc(u.n)} <span class="badge st-${u.st || 'none'}">${u.k === 'data' ? (u.asset ? 'asset · ' + esc(u.asset) : u.table ? 'jump table' : 'data') : STATUS_TEXT[u.st || 'none']}</span></h1>`;
-  card += `<div class="meta">${hex4(u.s)}–${hex4(u.e - 1)} · ${size} byte${size === 1 ? '' : 's'}</div>`;
+  card += `<div class="meta">${romAddr(u.s)}–${romAddr(u.e - 1)} · ${size} byte${size === 1 ? '' : 's'}</div>`;
   if (u.def) {
     const ps = (u.params || []).map(([n, r]) => `<span class="chip">${esc(n)} ← <b>${r}</b></span>`).join('');
     const rs = (u.returns || []).length ? `<span class="chip">returns <b>${u.returns.join(', ')}</b></span>` : '';
@@ -865,10 +896,10 @@ function renderCode(name) {
     } else
     $('#psrc').innerHTML = `<div class="placeholder">${u.table ? `<b>Jump table</b> with ${u.table.length} entries${G.jumpRst !== null && G.jumpRst !== undefined ? ` (used with <span class="kbd">rst $${G.jumpRst.toString(16).toUpperCase().padStart(2, '0')}</span>)` : ''}:<pre>${u.table.map((t, i) => `${String(i).padStart(2)}: ${hl(t, 'py')}`).join('\n')}</pre>` : 'Data block — no pseudo-code.'}</div>`;
   } else {
-    $('#psrc').innerHTML = `<div class="placeholder"><b>No pseudo-code yet.</b><br>Add a header above the label and <span class="kbd">;></span> lines between the instructions in <span class="kbd">src/${esc(u.file || '')}</span>, then run <span class="kbd">python tools/gbbolt.py</span>. A starting point from the static analysis:<pre>${esc(headerTemplate(u))}</pre></div>`;
+    $('#psrc').innerHTML = `<div class="placeholder"><b>No pseudo-code yet.</b><br>Add a header above the label and <span class="kbd">;></span> lines between the instructions in <span class="kbd">${esc(u.file || '')}</span>, then run <span class="kbd">python tools/gbbolt.py</span>. A starting point from the static analysis:<pre>${esc(headerTemplate(u))}</pre></div>`;
   }
   // asm pane
-  $('#asmrange').textContent = `${hex4(u.s)}–${hex4(u.e - 1)}`;
+  $('#asmrange').textContent = `${romAddr(u.s)}–${romAddr(u.e - 1)}`;
   let prevOwner = null;
   const asmRow = (l, own) => {
     const [addr, bytes, kind, text, comment, g, owner] = l;
@@ -881,14 +912,16 @@ function renderCode(name) {
       : row.replace(/^<div class="ln( lbl)?"/, `<div class="ln$1"${ga}`);
   };
   const rowHtml = (addr, bytes, kind, text, comment) => {
-    const ad = addr !== null && kind !== 'b' && kind !== 'c' ? hex4(addr).slice(1) : '';
+    const ad = addr !== null && kind !== 'b' && kind !== 'c' ? romShort(addr) : '';
+    const da = addr !== null ? ` data-a="${addr}"` : '';
     const cm = c => c ? `<span class="cm k-com">${esc(c)}</span>` : '';
-    if (kind === 'l') return `<div class="ln lbl"><span class="ad">${ad}</span><span class="by"></span><span class="tx">${esc(text)}:</span></div>`;
+    if (kind === 'l') return `<div class="ln lbl"><span class="ad"${da}>${ad}</span><span class="by"></span><span class="tx">${esc(text)}:</span></div>`;
+    if (kind === 'x' || kind === 'n') return `<div class="ln ${kind === 'x' ? 'dir' : 'off'}"${kind === 'n' ? ' title="not assembled in this version (conditional assembly)"' : ''}><span class="ad"></span><span class="by"></span><span class="tx">    ${esc(text)}${comment ? ' ' : ''}</span>${cm(comment)}</div>`;
     let body;
     if (kind === 'c') body = `<span class="tx"></span>${cm(comment)}`;
     else if (kind === 'b') body = '<span class="tx"> </span>';
     else body = `<span class="tx">    ${hl(text, 'asm')}${comment ? ' ' : ''}</span>${cm(comment)}`;
-    return `<div class="ln"><span class="ad">${ad}</span><span class="by">${bytes}</span>${body}</div>`;
+    return `<div class="ln"><span class="ad"${da}>${ad}</span><span class="by">${bytes}</span>${body}</div>`;
   };
   const elsewhere = (u.foreign || []).map(f => `<div class="ln sep"><span class="tx">elsewhere, inside <a href="#/code/${encodeURIComponent(f.host)}">${esc(f.host)}</a>:</span></div>` +
     f.lines.map(l => asmRow(l, true)).join('')).join('');
@@ -968,6 +1001,8 @@ const linker = (function () {
 })();
 
 // narrow screens: the header menu and the book's chapters open as drawers too
+document.body.classList.toggle('banked', !!D.banked);
+if (D.banked) $('#farleg').hidden = false;
 $('#navbtn').onclick = e => { e.stopPropagation(); document.body.classList.toggle('navopen'); };
 $('#tocbtn').onclick = e => { e.stopPropagation(); document.body.classList.toggle('tocopen'); };
 document.addEventListener('click', e => {
@@ -1085,7 +1120,7 @@ function renderBook(arg) {
   const fnSection = u => {
     const lines = renderPseudo(u, bookMode, true);
     const code = lines.map(l => l.doc ? `<span class="k-str">${esc(l.t)}</span>` : l.raw ? `<span class="k-com">${esc(l.t)}</span>` : hl(l.t, bookMode === 'c' ? 'c' : 'py')).join('\n');
-    return `<section class="bfn" id="b-${esc(u.n)}"><h2><span class="dot st-${u.st}"></span><a href="#/code/${encodeURIComponent(u.n)}">${esc(u.n)}</a><span class="ad">${hex4(u.s)}</span><span class="badge st-${u.st}">${STATUS_TEXT[u.st]}</span></h2><pre>${code}</pre></section>`;
+    return `<section class="bfn" id="b-${esc(u.n)}"><h2><span class="dot st-${u.st}"></span><a href="#/code/${encodeURIComponent(u.n)}">${esc(u.n)}</a><span class="ad">${romAddr(u.s)}</span><span class="badge st-${u.st}">${STATUS_TEXT[u.st]}</span></h2><pre>${code}</pre></section>`;
   };
   const chapter = f => {
     const depth = f.split('/').length, tag = depth === 1 ? 'h2' : depth === 2 ? 'h3' : 'h4';
@@ -1121,7 +1156,7 @@ function cssVar(n) { return getComputedStyle(document.documentElement).getProper
 function renderCoverage() {
   const map = D.rommap;
   const cnt = {}; for (const ch of map) cnt[ch] = (cnt[ch] || 0) + 1;
-  const codeBytes = map.length - (cnt.d || 0);
+  const codeBytes = map.length - (cnt.d || 0) - (cnt.e || 0);
   const annBytes = (cnt.v || 0) + (cnt.k || 0) + (cnt.f || 0) + (cnt.s || 0);
   const funcs = CODE_UNITS.length, ann = ANN.length;
   const by = s => ANN.filter(u => u.st === s).length;
@@ -1142,14 +1177,15 @@ function renderCoverage() {
       ${tile(D.build.ok ? '✓' : '✗', 'rebuilt ROM matches the original byte for byte')}
     </div>
     <h3>ROM map</h3>
-    <div class="legend"><span><i style="background:var(--ok)"></i>verified</span><span><i style="background:var(--chk)"></i>checked</span><span><i style="background:var(--fail)"></i>failing</span><span><i style="background:var(--stale)"></i>stale</span><span><i style="background:var(--codec)"></i>code, not annotated</span><span><i style="background:var(--datac)"></i>data</span></div>
-    <canvas id="rommap" width="256" height="${Math.ceil(map.length / 256)}"></canvas>
-    <div id="maptip">one pixel per byte, 256 bytes per row — click to open</div>
+    <div class="legend"><span><i style="background:var(--ok)"></i>verified</span><span><i style="background:var(--chk)"></i>checked</span><span><i style="background:var(--fail)"></i>failing</span><span><i style="background:var(--stale)"></i>stale</span><span><i style="background:var(--codec)"></i>code, not annotated</span><span><i style="background:var(--datac)"></i>data</span>${D.banked ? '<span><i style="background:var(--emptyc);outline:1px solid var(--border)"></i>free space</span>' : ''}</div>
+    ${D.banked ? bankGrid() : `<canvas id="rommap" width="256" height="${Math.ceil(map.length / 256)}"></canvas>`}
+    <div id="maptip">${D.banked ? 'one pixel per byte, 128 bytes per row, one square per 16 KiB bank — click to open' : 'one pixel per byte, 256 bytes per row — click to open'}</div>
     ${nextUp.length ? `<h3>Next up — most-called functions without pseudo-code</h3>
     <table class="grid"><tr><th>function</th><th>address</th><th>size</th><th>callers</th></tr>
-      ${nextUp.map(x => `<tr><td class="m"><a href="#/code/${encodeURIComponent(x.u.n)}">${esc(x.u.n)}</a></td><td class="m">${hex4(x.u.s)}</td><td class="m">${x.size}</td><td class="m">${x.callers}</td></tr>`).join('')}
+      ${nextUp.map(x => `<tr><td class="m"><a href="#/code/${encodeURIComponent(x.u.n)}">${esc(x.u.n)}</a></td><td class="m">${romAddr(x.u.s)}</td><td class="m">${x.size}</td><td class="m">${x.callers}</td></tr>`).join('')}
     </table>` : ''}
     <p style="color:var(--muted);font-size:12.5px">Verification took ${D.verifySeconds}s · generated ${D.generated}</p>`;
+  if (D.banked) return drawBanks();
   const cv = $('#rommap'); const ctx = cv.getContext('2d');
   const col = {v: cssVar('--ok'), k: cssVar('--chk'), f: cssVar('--fail'), s: cssVar('--stale'), c: cssVar('--codec'), d: cssVar('--datac')};
   const img = ctx.createImageData(256, cv.height);
@@ -1160,8 +1196,46 @@ function renderCoverage() {
   cv.style.width = Math.min(768, cv.parentElement.clientWidth - 10) + 'px';
   const unitAt = a => { let lo = 0, hi = D.units.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (D.units[m].s <= a) lo = m; else hi = m - 1; } return D.units[lo]; };
   const pos = e => { const r = cv.getBoundingClientRect(); const x = Math.floor((e.clientX - r.left) / r.width * 256), y = Math.floor((e.clientY - r.top) / r.height * cv.height); return y * 256 + x; };
-  cv.onmousemove = e => { const a = pos(e); const u = unitAt(a); $('#maptip').textContent = `${hex4(a)} · ${u.n} (${u.k === 'data' ? 'data' : STATUS_TEXT[u.st || 'none']})`; };
+  cv.onmousemove = e => { const a = pos(e); const u = unitAt(a); $('#maptip').textContent = `${romAddr(a)} · ${u.n} (${u.k === 'data' ? 'data' : STATUS_TEXT[u.st || 'none']})`; };
   cv.onclick = e => { location.hash = '#/code/' + encodeURIComponent(unitAt(pos(e)).n); };
+}
+
+// banked games: one 128 x 128 square per bank, labelled with its biggest sections
+function bankUsage(b) {
+  const map = D.rommap, cnt = {};
+  for (let i = b * 0x4000; i < Math.min(map.length, (b + 1) * 0x4000); i++) cnt[map[i]] = (cnt[map[i]] || 0) + 1;
+  return cnt;
+}
+function bankGrid() {
+  const cards = [], empty = [];
+  for (const bk of D.banks) {
+    const cnt = bankUsage(bk.b);
+    if ((cnt.e || 0) === 0x4000) { empty.push(bk.b); continue; }
+    const secs = bk.sections.slice().sort((x, y) => (y[2] - y[1]) - (x[2] - x[1]));
+    const code = 0x4000 - (cnt.d || 0) - (cnt.e || 0), free = cnt.e || 0;
+    const name = secs.length ? secs.slice(0, 2).map(s => s[0]).join(' · ') : '';
+    cards.push(`<div class="bank${bk.b === 0 ? ' home' : ''}"><div class="bh" title="${Math.round(100 * code / 0x4000)}% code, ${Math.round(100 * (0x4000 - code - free) / 0x4000)}% data, ${Math.round(100 * free / 0x4000)}% free">bank ${bk.b.toString(16).toUpperCase().padStart(2, '0')}<span>${free >= 0x400 ? Math.round(100 * free / 0x4000) + '% free' : 'full'}</span></div>` +
+      `<div class="bs" title="${esc(secs.map(s => s[0]).join(', '))}">${esc(name) || '&nbsp;'}</div><canvas width="128" height="128" data-b="${bk.b}"></canvas></div>`);
+  }
+  const hex = b => b.toString(16).toUpperCase().padStart(2, '0');
+  const tail = empty.length ? `<p style="color:var(--muted);font-size:12.5px">Bank${empty.length > 1 ? 's' : ''} ${hex(empty[0])}${empty.length > 1 ? '–' + hex(empty[empty.length - 1]) : ''} ${empty.length > 1 ? 'are' : 'is'} empty: the ROM is padded to ${D.rommap.length >> 10} KiB.</p>` : '';
+  return `<div class="banks">${cards.join('')}</div>${tail}`;
+}
+function drawBanks() {
+  const col = {v: cssVar('--ok'), k: cssVar('--chk'), f: cssVar('--fail'), s: cssVar('--stale'), c: cssVar('--codec'), d: cssVar('--datac'), e: cssVar('--emptyc')};
+  const probe = document.createElement('canvas').getContext('2d'), rgb = {};
+  for (const [k, c] of Object.entries(col)) { probe.fillStyle = c; probe.fillRect(0, 0, 1, 1); rgb[k] = probe.getImageData(0, 0, 1, 1).data.slice(0, 3); }
+  for (const cv of $$('.bank canvas')) {
+    const b = +cv.dataset.b, ctx = cv.getContext('2d'), img = ctx.createImageData(128, 128), base = b * 0x4000;
+    for (let i = 0; i < 0x4000; i++) { const c = rgb[D.rommap[base + i]] || rgb.e; img.data.set([c[0], c[1], c[2], 255], i * 4); }
+    ctx.putImageData(img, 0, 0);
+    const pos = e => { const r = cv.getBoundingClientRect(); return base + Math.floor((e.clientY - r.top) / r.height * 128) * 128 + Math.floor((e.clientX - r.left) / r.width * 128); };
+    cv.onmousemove = e => {
+      const a = pos(e), u = unitContaining(a), sec = (D.banks[b].sections.find(s => s[1] <= a && a < s[2]) || [])[0];
+      $('#maptip').textContent = `${romAddr(a)} · ` + (u ? `${u.n} (${u.k === 'data' ? 'data' : STATUS_TEXT[u.st || 'none']})` : 'free space') + (sec ? ` · section "${sec}"` : '');
+    };
+    cv.onclick = e => { const u = unitContaining(pos(e)); if (u) location.hash = '#/code/' + encodeURIComponent(u.n); };
+  }
 }
 
 // ---------------------------------------------------------------- call graph
@@ -1240,14 +1314,18 @@ function renderGraph(arg, force) {
   let nodes;
   if (gmode === 'nb') {
     const depth = +$('#gdepth').value;
-    const keep = new Set([focus]); let frontier = [focus];
+    // callers upwards and callees downwards (not their other callers: siblings), and not
+    // through hubs (small helpers half the program calls) beyond the focus itself
+    const fanIn = new Map(); edges.forEach(e => fanIn.set(e.b, (fanIn.get(e.b) || 0) + 1));
+    const hub = n => n !== focus && (fanIn.get(n) || 0) > 12;
+    const keep = new Set([focus]); let up = [focus], down = [focus];
     for (let d = 0; d < depth; d++) {
-      const next = [];
+      const nu = [], nd = [], ups = new Set(up.filter(n => !hub(n))), downs = new Set(down.filter(n => !hub(n)));
       for (const e of edges) {
-        if (frontier.includes(e.a) && !keep.has(e.b)) { keep.add(e.b); next.push(e.b); }
-        if (frontier.includes(e.b) && !keep.has(e.a)) { keep.add(e.a); next.push(e.a); }
+        if (downs.has(e.a) && !keep.has(e.b)) { keep.add(e.b); nd.push(e.b); }
+        if (ups.has(e.b) && !keep.has(e.a)) { keep.add(e.a); nu.push(e.a); }
       }
-      frontier = next;
+      up = nu; down = nd;
     }
     nodes = [...keep]; edges = edges.filter(e => keep.has(e.a) && keep.has(e.b));
   } else {
@@ -1317,7 +1395,7 @@ function selectNode(n) {
   gstate.sel = n; highlightNode(n);
   const u = U.get(n);
   $('#ginfo').style.display = 'block';
-  $('#ginfo').innerHTML = `<div style="font:600 14px var(--mono)"><span class="dot st-${statusOf(u)}"></span> ${esc(n)}</div><div style="color:var(--muted)">${hex4(u.s)} · ${u.e - u.s} bytes · ${STATUS_TEXT[u.st || 'none']}</div>` +
+  $('#ginfo').innerHTML = `<div style="font:600 14px var(--mono)"><span class="dot st-${statusOf(u)}"></span> ${esc(n)}</div><div style="color:var(--muted)">${romAddr(u.s)} · ${u.e - u.s} bytes · ${STATUS_TEXT[u.st || 'none']}</div>` +
     (u.doc ? `<p>${u.doc.map(d => esc(d)).join(' ')}</p>` : '') +
     `<div style="margin-top:6px">called by</div><div>${linkList(u.in || [])}</div><div style="margin-top:6px">calls</div><div>${linkList(u.out || [])}</div>` +
     `<p><a href="#/code/${encodeURIComponent(n)}">Open code →</a> · <a href="#/graph/${encodeURIComponent(n)}">Centre here</a></p>`;
@@ -1328,7 +1406,10 @@ function renderRam(sel) {
   const ram = D.vars.filter(v => v.type !== 'io');
   const io = D.vars.filter(v => v.type === 'io');
   const owner = new Map();
-  ram.forEach((v, i) => { for (let a = v.addr; a < v.addr + Math.max(1, v.size); a++) owner.set(a, {v, h: (i * 47 + 20) % 360}); });
+  // SRAM banks share $A000-$BFFF: their bytes are keyed bank * $10000 + address
+  const sramKey = (bank, a) => a >= 0xA000 && a < 0xC000 ? (bank || 0) * 0x10000 + a : a;
+  ram.forEach((v, i) => { for (let a = v.addr; a < v.addr + Math.max(1, v.size); a++) owner.set(sramKey(v.bank, a), {v, h: (i * 47 + 20) % 360}); });
+  const sramBanks = [...new Set(ram.filter(v => v.addr >= 0xA000 && v.addr < 0xC000).map(v => v.bank || 0))].sort((x, y) => x - y);
   const unnamedAt = new Map(D.unnamed.map(x => [x.addr, x]));
   let hram = '';
   for (let a = 0xFF80; a <= 0xFFFE; a++) {
@@ -1338,12 +1419,14 @@ function renderRam(sel) {
     else hram += `<div title="${hex4(a)}">${a.toString(16).slice(2).toUpperCase()}</div>`;
   }
   const accessCell = arr => arr.length ? `<span class="links">${arr.map(n => `<a href="#/code/${encodeURIComponent(n)}">${esc(n)}</a>`).join(' ')}</span>` : '<span style="color:var(--muted)">—</span>';
-  const row = v => `<tr id="ram-${esc(v.name)}" class="${v.name === sel ? 'sel' : ''}"><td class="m">${hex4(v.addr)}</td><td class="m"><b>${esc(v.name)}</b></td><td class="m">${esc(v.type)}</td><td>${esc(v.desc)}</td><td>${accessCell(v.reads)}</td><td>${accessCell(v.writes)}</td><td>${accessCell(v.ptrs)}</td></tr>`;
+  const row = v => `<tr id="ram-${esc(v.name)}" class="${v.name === sel ? 'sel' : ''}"><td class="m">${v.bank !== undefined ? v.bank + ':' + hex4(v.addr).slice(1) : hex4(v.addr)}</td><td class="m"><b>${esc(v.name)}</b></td><td class="m">${esc(v.type)}</td><td>${esc(v.desc)}</td><td>${accessCell(v.reads)}</td><td>${accessCell(v.writes)}</td><td>${accessCell(v.ptrs)}</td></tr>`;
   $('#ram').innerHTML = `
     <div class="memwrap">
       <div><h3 style="margin-top:0">HRAM $FF80–$FFFE</h3><div class="hram" id="hram">${hram}</div>
         <div class="legend"><span><i style="background:hsla(200,65%,50%,.6)"></i>named</span><span><i style="background:var(--chk)"></i>used but unnamed</span><span><i style="background:var(--panel2);border:1px solid var(--border)"></i>not referenced</span></div></div>
-      <div><h3 style="margin-top:0">WRAM $C000–$DFFF</h3><canvas id="wram" width="128" height="64"></canvas><div id="wtip" style="font:12.5px var(--mono);color:var(--muted);min-height:1.4em">one pixel per byte, 128 bytes per row</div></div>
+      <div><h3 style="margin-top:0">WRAM $C000–$DFFF</h3><canvas id="wram" class="memcv" data-base="49152" data-bank="0" width="128" height="64"></canvas><div id="wtip" style="font:12.5px var(--mono);color:var(--muted);min-height:1.4em">one pixel per byte, 128 bytes per row</div></div>
+      ${sramBanks.length ? `<div><h3 style="margin-top:0">SRAM $A000–$BFFF · the save file</h3><div class="srams">${sramBanks.map(b =>
+        `<div><div class="srl">bank ${b}</div><canvas class="memcv" data-base="40960" data-bank="${b}" width="128" height="64"></canvas></div>`).join('')}</div></div>` : ''}
     </div>
     <h3>Named variables (${ram.length})</h3>
     <table class="grid"><tr><th>address</th><th>name</th><th>type</th><th>description</th><th>read by</th><th>written by</th><th>address taken by</th></tr>${ram.map(row).join('')}</table>
@@ -1353,17 +1436,20 @@ function renderRam(sel) {
     <h3>Hardware registers used (${io.length})</h3>
     <table class="grid"><tr><th>address</th><th>name</th><th>read by</th><th>written by</th></tr>${io.map(v => `<tr id="ram-${esc(v.name)}" class="${v.name === sel ? 'sel' : ''}"><td class="m">${hex4(v.addr)}</td><td class="m">${esc(v.name)}</td><td>${accessCell(v.reads)}</td><td>${accessCell(v.writes)}</td></tr>`).join('')}</table>`;
   $$('#hram div[data-v]').forEach(d => d.onclick = () => location.hash = '#/ram/' + encodeURIComponent(d.dataset.v));
-  const cv = $('#wram'), ctx = cv.getContext('2d');
-  ctx.fillStyle = cssVar('--panel2'); ctx.fillRect(0, 0, 128, 64);
-  for (let a = 0xC000; a < 0xE000; a++) {
-    const o = owner.get(a), un = unnamedAt.get(a); const i = a - 0xC000;
-    if (o) ctx.fillStyle = `hsla(${o.h},65%,50%,${o.v.name === sel ? 1 : .7})`; else if (un) ctx.fillStyle = cssVar('--chk'); else continue;
-    ctx.fillRect(i % 128, Math.floor(i / 128), 1, 1);
+  for (const cv of $$('#ram .memcv')) {
+    const ctx = cv.getContext('2d'), base = +cv.dataset.base, bank = +cv.dataset.bank, sram = base === 0xA000;
+    ctx.fillStyle = cssVar('--panel2'); ctx.fillRect(0, 0, 128, 64);
+    for (let a = base; a < base + 0x2000; a++) {
+      const o = owner.get(sramKey(bank, a)), un = sram ? null : unnamedAt.get(a); const i = a - base;
+      if (o) ctx.fillStyle = `hsla(${o.h},65%,50%,${o.v.name === sel ? 1 : .7})`; else if (un) ctx.fillStyle = cssVar('--chk'); else continue;
+      ctx.fillRect(i % 128, Math.floor(i / 128), 1, 1);
+    }
+    if (!sram) { cv.style.width = '512px'; cv.style.height = '256px'; }
+    const at = e => { const r = cv.getBoundingClientRect(); return base + Math.floor((e.clientY - r.top) / r.height * 64) * 128 + Math.floor((e.clientX - r.left) / r.width * 128); };
+    cv.onmousemove = e => { const a = at(e), o = owner.get(sramKey(bank, a)), un = sram ? null : unnamedAt.get(a);
+      $('#wtip').textContent = (sram ? bank + ':' + hex4(a).slice(1) : hex4(a)) + (o ? ' · ' + o.v.name : un ? ' · unnamed, used by ' + [...un.reads, ...un.writes].join(', ') : ''); };
+    cv.onclick = e => { const o = owner.get(sramKey(bank, at(e))); if (o) location.hash = '#/ram/' + encodeURIComponent(o.v.name); };
   }
-  cv.style.width = '512px'; cv.style.height = '256px';
-  const at = e => { const r = cv.getBoundingClientRect(); return 0xC000 + Math.floor((e.clientY - r.top) / r.height * 64) * 128 + Math.floor((e.clientX - r.left) / r.width * 128); };
-  cv.onmousemove = e => { const a = at(e), o = owner.get(a), un = unnamedAt.get(a); $('#wtip').textContent = hex4(a) + (o ? ' · ' + o.v.name : un ? ' · unnamed, used by ' + [...un.reads, ...un.writes].join(', ') : ''); };
-  cv.onclick = e => { const o = owner.get(at(e)); if (o) location.hash = '#/ram/' + encodeURIComponent(o.v.name); };
   if (sel) { const el = document.getElementById('ram-' + sel); if (el) el.scrollIntoView({block: 'center'}); }
 }
 
@@ -1413,7 +1499,7 @@ function drawTiles(a, el, size) {
     c.onmousemove = e => {
       const r = c.getBoundingClientRect();
       const t = Math.floor((e.clientY - r.top) / r.height * rows) * cols + Math.floor((e.clientX - r.left) / r.width * cols);
-      if (t < n) tip.textContent = `tile ${t} ($${t.toString(16).toUpperCase().padStart(2, '0')}) · ROM ${hex4(a.start + t * per)}`;
+      if (t < n) tip.textContent = `tile ${t} ($${t.toString(16).toUpperCase().padStart(2, '0')}) · ROM ${romAddr(a.start + t * per)}`;
     };
   }
 }
@@ -1432,7 +1518,7 @@ function drawTilemap(a, el, size) {
     c.onmousemove = e => {
       const r = c.getBoundingClientRect();
       const x = Math.floor((e.clientX - r.left) / r.width * W), y = Math.floor((e.clientY - r.top) / r.height * H), i = y * W + x;
-      tip.textContent = `x ${x}, y ${y} · tile $${map[i].toString(16).toUpperCase().padStart(2, '0')} · ROM ${hex4(a.start + i)}`;
+      tip.textContent = `x ${x}, y ${y} · tile $${map[i].toString(16).toUpperCase().padStart(2, '0')} · ROM ${romAddr(a.start + i)}`;
     };
   }
 }
@@ -1730,7 +1816,7 @@ function drawAsset(a, el, size) {
 function hexdump(a, max) {
   const d = b64(a.bytes), out = [];
   for (let i = 0; i < Math.min(d.length, max); i += 16)
-    out.push(hex4(a.start + i).slice(1) + '  ' + Array.from(d.slice(i, i + 16), b => b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
+    out.push(romShort(a.start + i) + '  ' + Array.from(d.slice(i, i + 16), b => b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
   if (d.length > max) out.push(`… ${d.length - max} more bytes`);
   return out.join('\n');
 }
@@ -1830,7 +1916,7 @@ function renderAssets(sel) {
     const users = a.users.length ? a.users.map(n => `<a class="chip" href="#/code/${encodeURIComponent(n)}">${esc(n)}</a>`).join(' ') : '<span style="color:var(--muted)">—</span>';
     root.innerHTML = `<p style="margin-top:0"><a href="#/assets">← all assets</a></p>
       <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;max-width:1400px"><div><h1 style="font:600 18px var(--mono);margin:0 0 4px">${esc(a.name)} <span class="badge">${esc(a.type)}</span></h1>
-      <div style="color:var(--muted);font-size:12.5px;margin-bottom:12px">${hex4(a.start)}–${hex4(a.start + a.length - 1)} · ${a.length} bytes</div></div><span class="spacer"></span>${usesPalette([a]) ? palBtns : ''}</div>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:12px">${romAddr(a.start)}–${romAddr(a.start + a.length - 1)} · ${a.length} bytes</div></div><span class="spacer"></span>${usesPalette([a]) ? palBtns : ''}</div>
       <div class="adetail"><div><div class="astage" id="astage"></div></div>
         <div class="ameta"><p style="margin-top:0">${(a.doc || []).map(d => hl(d, 'doc')).join(' ')}</p>
           <table class="kv">${Object.entries(a.params).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="m">${hl(v, 'doc')}</td></tr>`).join('')}
@@ -2249,7 +2335,7 @@ function showTip(e) {
   if (n.noise) lines.push(`noise: ${n.noise[1] ? '7-bit (metallic)' : '15-bit'}, shift ${n.noise[0]}, divider ${n.noise[2]}`);
   if (n.wave !== undefined) lines.push(`waveform #${n.wave + 1}`);
   lines.push(n.own === 'music' ? 'music' : `effect: ${esc(soundName(n.own))} (${n.own})`);
-  if (n.src !== undefined) { const u = unitAt(n.src); lines.push(`pattern byte ${hex4(n.src)}${u ? ' in ' + esc(u.n) : ''} — double-click to open`); }
+  if (n.src !== undefined) { const u = unitAt(n.src); lines.push(`pattern byte ${romAddr(n.src)}${u ? ' in ' + esc(u.n) : ''} — double-click to open`); }
   tip.innerHTML = lines.join('<br>');
   const r = $('#mstage').getBoundingClientRect();
   tip.style.display = 'block';
@@ -2309,7 +2395,7 @@ function buildStructure() {
       const end = i + 1 < secs.length ? secs[i + 1][0] : total;
       const idx = pats.indexOf(s[1]);
       const u = unitAt(s[1]);
-      return `<div class="sec" data-t="${s[0]}" title="${esc(u && u.s === s[1] ? u.n : 'pattern')} at ${hex4(s[1])} — from ${fmtT(s[0] / tl.fps, it.seconds)}" style="left:${100 * s[0] / total}%;width:${100 * (end - s[0]) / total}%;--h:${CH_HUE[ch] + idx * 23};--a:${0.18 + 0.12 * (idx % 3)}">${esc(patternName(s[1]))}</div>`;
+      return `<div class="sec" data-t="${s[0]}" title="${esc(u && u.s === s[1] ? u.n : 'pattern')} at ${romAddr(s[1])} — from ${fmtT(s[0] / tl.fps, it.seconds)}" style="left:${100 * s[0] / total}%;width:${100 * (end - s[0]) / total}%;--h:${CH_HUE[ch] + idx * 23};--a:${0.18 + 0.12 * (idx % 3)}">${esc(patternName(s[1]))}</div>`;
     }).join('') + '</div>';
   }).join('') + '<div class="ph"></div>';
   $$('#mstruct .sec').forEach(d => d.onclick = () => musicSeek(+d.dataset.t / tl.fps));
@@ -2320,7 +2406,7 @@ const fmtCs = s => Math.floor(s / 60) + ':' + (s % 60).toFixed(2).padStart(5, '0
 // a pattern's name (its label), shortened: Song05Pat3 -> Pat3
 function patternName(addr) {
   const u = unitAt(addr);
-  return u && u.s === addr ? u.n.replace(/^Song[0-9A-F]{2}/, '') : hex4(addr).slice(1);
+  return u && u.s === addr ? u.n.replace(/^Song[0-9A-F]{2}/, '') : romShort(addr);
 }
 function buildTracker() {
   const tl = music.tl, it = music.item;
@@ -2334,7 +2420,7 @@ function buildTracker() {
     const name = ch === 3 ? 'nz' : (n.f[0][1] < 2048 ? noteName(midiOf(hzOf(ch, n.f[0][1]))) : '?');
     const extra = [n.duty !== undefined ? 'd' + n.duty : '', n.wave !== undefined ? 'w' + (n.wave + 1) : '', n.env ? 'v' + n.env[0] + (n.env[2] ? (n.env[1] ? '↑' : '↓') + n.env[2] : '') : 'v' + v0,
       n.sweep ? 'sw' : '', n.noise ? 's' + n.noise[0] + 'd' + n.noise[2] : '', n.d + 'f'].filter(Boolean).join(' ');
-    return `<td class="${n.own !== 'music' ? 'fx' : ''}" style="--cc:${chColor(ch, 1)}" title="${n.own !== 'music' ? esc(soundName(n.own)) : ''}${n.src !== undefined ? ' ' + hex4(n.src) : ''}"><span class="n">${name}</span> <span class="x">${extra}</span></td>`;
+    return `<td class="${n.own !== 'music' ? 'fx' : ''}" style="--cc:${chColor(ch, 1)}" title="${n.own !== 'music' ? esc(soundName(n.own)) : ''}${n.src !== undefined ? ' ' + romAddr(n.src) : ''}"><span class="n">${name}</span> <span class="x">${extra}</span></td>`;
   };
   $('#mtracker').innerHTML = `<table><tr><th>time</th>${CH_NAMES.map((n, i) => `<th style="color:${chColor(i, 1)}">${n}</th>`).join('')}</tr>` +
     rows.map(f => `<tr data-f="${f}"><td class="t">${fmtCs(f / tl.fps)}</td>${starts.get(f).map(cell).join('')}</tr>`).join('') + '</table>';

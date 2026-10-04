@@ -215,3 +215,22 @@ def read_consts():
             if m:
                 out.setdefault(m.group(1), int(m.group(2), 16))
     return out
+
+
+def read_map():
+    """Sections from rgblink's .map file: [(type, bank, start, end, name)], end exclusive."""
+    out, kind, bank = [], None, 0
+    path = os.path.join(OUT, 'game.map')
+    if not os.path.exists(path):
+        return out
+    for line in open(path, encoding='utf-8', errors='replace'):
+        m = re.match(r'^(ROM0|ROMX|VRAM|SRAM|WRAM0|WRAMX|OAM|HRAM) bank #(\d+):', line)
+        if m:
+            kind, bank = m.group(1), int(m.group(2))
+            continue
+        m = re.match(r'^\s+SECTION: \$([0-9a-f]+)(?:-\$([0-9a-f]+))? \(\$[0-9a-f]+ bytes?\) \["(.*)"\]', line, re.I)
+        if m and kind:
+            start = int(m.group(1), 16)
+            end = int(m.group(2), 16) + 1 if m.group(2) else start
+            out.append((kind, bank, start, end, m.group(3)))
+    return out

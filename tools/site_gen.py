@@ -21,9 +21,17 @@ def unit_paths(project):
     """Virtual folder of every unit: `;@ path:` if given; a data block otherwise
     takes the folder most of its users are in (the unit before it if nobody
     refers to it)."""
+    import bisect
     p, an = project.parsed, project.analysis
     paths = {u.name: u.path for u in p.units if u.path}
-    data = [u for u in p.units if u.kind == 'data' and u.name not in paths]
+    if build.GAME.get('unit_labels') == 'global':
+        # pret style: the source tree is already organised; a unit lives where its file does
+        for u in p.units:
+            if u.name not in paths:
+                paths[u.name] = os.path.splitext(p.lines[u.first_line].file)[0]
+        return paths
+    data = sorted((u for u in p.units if u.kind == 'data' and u.name not in paths), key=lambda u: u.start)
+    starts = [d.start for d in data]
     users = {u.name: {} for u in data}
     for code in p.units:
         if code.name not in paths or code.name not in an.refs:
@@ -31,9 +39,13 @@ def unit_paths(project):
         # RAM accesses plus every 16-bit immediate (ROM pointers like `ld de, MenuObjects`)
         addrs = set().union(*an.refs[code.name].values())
         addrs |= {i.imm for i in an.insns.get(code.name, []) if i.imm is not None and i.imm >= 0x150}
-        for d in data:
-            if any(d.start <= a < d.end for a in addrs):
-                users[d.name][paths[code.name]] = users[d.name].get(paths[code.name], 0) + 1
+        hit = set()
+        for a in addrs:
+            k = bisect.bisect_right(starts, a) - 1
+            if k >= 0 and a < data[k].end:
+                hit.add(data[k].name)
+        for name in hit:
+            users[name][paths[code.name]] = users[name].get(paths[code.name], 0) + 1
     order = [u.name for u in p.units]
     for name in an.tables:                           # a jump table belongs with its dispatcher (the unit before it)
         i = order.index(name)
@@ -105,6 +117,9 @@ def unit_data(project, u, res, edges_from, edges_to):
             out_lines.append([None, '', 'c', '', ln.comment, ln.group])
         elif ln.kind in ('insn', 'data'):
             out_lines.append(insn_row(ln, rom))
+        elif ln.kind in ('directive', 'inactive') and ln.text:
+            # assembler directives and macro / REPT bodies ('x'); IF branches not assembled ('n')
+            out_lines.append([None, '', 'x' if ln.kind == 'directive' else 'n', ln.text, ln.comment, ln.group])
         if ln.xref:
             out_lines[-1] = out_lines[-1][:6] + [ln.xref[0]]   # belongs to a line of another unit
     while out_lines and out_lines[-1][2] == 'b':
@@ -126,7 +141,7 @@ def unit_data(project, u, res, edges_from, edges_to):
         'n': u.name, 's': u.start, 'e': u.end, 'k': u.kind,
         'st': res.status if u.annotated else 'none',
         'lines': out_lines,
-        'file': lines[u.first_line].file,
+        'file': os.path.relpath(os.path.join(build.SRC, lines[u.first_line].file), build.ROOT).replace(os.sep, '/'),
         'foreign': foreign,
         'out': sorted({(t, k) for t, k in edges_from.get(u.name, [])}),
         'in': sorted({(f, k) for f, k in edges_to.get(u.name, [])}),
@@ -492,6 +507,21 @@ def generate(project):
             for a in range(ln.addr, min(ln.addr + ln.size, len(rommap))):
                 rommap[a] = 'd'
 
+    banks = None
+    if build.BANKED:
+        # banked games: bytes outside every section are free space; the banks with their sections
+        sections = [s for s in build.read_map() if s[0] in ('ROM0', 'ROMX') and s[3] > s[2]]
+        inside = bytearray(len(project.rom))
+        for kind, bank, start, end, name in sections:
+            lo = build.linear(bank, start)
+            inside[lo:lo + end - start] = b'' * (end - start)
+        for a, used in enumerate(inside):
+            if not used:
+                rommap[a] = 'e'
+        banks = [{'b': b, 'sections': [[name, build.linear(bank, start), build.linear(bank, start) + end - start]
+                                       for kind, bank, start, end, name in sections if bank == b]}
+                 for b in range(len(project.rom) // 0x4000)]
+
     # memory references for the RAM map (static scan of every code unit)
     an = project.analysis
     access = {}
@@ -523,7 +553,9 @@ def generate(project):
         variables.append({'name': v['name'], 'addr': v['addr'], 'type': v['type'], 'size': v['size'],
                           'desc': v['desc'], 'reads': sorted(acc['reads']), 'writes': sorted(acc['writes']),
                           'ptrs': sorted(acc['ptrs'])})
-    variables.sort(key=lambda v: v['addr'])
+        if 0xA000 <= v['addr'] < 0xC000 and v.get('bank'):
+            variables[-1]['bank'] = v['bank']             # SRAM bank (the save file)
+    variables.sort(key=lambda v: (v.get('bank', 0) if 0xA000 <= v['addr'] < 0xC000 else 0, v['addr']))
     unnamed = []
     # pointers only (no access through them by name), inside a memory region the
     # source names (`WORK_RAM0 + $FFF` etc.: start of a downward fill)
@@ -555,6 +587,8 @@ def generate(project):
         'build': {'ok': project.build_ok, 'msg': project.build_msg, 'sha1': build.sha1(build.BUILT)},
         'units': units,
         'rommap': ''.join(rommap),
+        'banked': bool(build.BANKED),
+        'banks': banks,
         'vars': variables,
         'unnamed': unnamed,
         'folders': folder_list(paths),
