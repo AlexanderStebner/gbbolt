@@ -1,8 +1,8 @@
 """Recursive code tracer for a 32 KiB (single bank) Game Boy ROM.
 
 Finds which bytes are code by following control flow from the entry points,
-including Tetris' `rst $28` jump tables (a table of addresses follows the
-rst instruction). Writes an mgbdis .sym file that marks code and data blocks
+including jump tables: a table of addresses right after an `rst` (game.json
+"jump_table_rst") or a call to a dispatcher routine ("jump_table_calls"). Writes an mgbdis .sym file that marks code and data blocks
 and names the discovered entry points.
 
     python tools/trace.py tetris.gb  ->  tetris.sym
@@ -16,6 +16,9 @@ import build  # noqa: E402
 from sm83 import decode  # noqa: E402
 
 JUMPTABLE_RST = build.GAME['jump_table_rst']   # `rst $xx` + table of addresses, or None
+# routines that are called with a table of addresses right after the call (game.json:
+# "jump_table_calls": ["0x0229"]) - they pop it as their return address and jump through it
+JUMPTABLE_TARGETS = ({JUMPTABLE_RST} if JUMPTABLE_RST is not None else set()) |     {int(a, 0) for a in build.GAME.get('jump_table_calls', [])}
 ENTRY_POINTS = {
     0x0100: 'Boot',
     0x0000: 'RST_00',
@@ -52,13 +55,10 @@ def trace(rom, table_limits):
             if k in ('jump', 'cjump'):
                 jumps.add(insn.target)
                 work.append(insn.target)
-            elif k in ('call', 'ccall'):
+            elif k in ('call', 'ccall', 'rst'):
                 calls.add(insn.target)
                 work.append(insn.target)
-            elif k == 'rst':
-                calls.add(insn.target)
-                work.append(insn.target)
-                if insn.target == JUMPTABLE_RST:
+                if insn.target in JUMPTABLE_TARGETS:
                     t = nxt
                     limit = table_limits.get(t)
                     entries = []

@@ -180,7 +180,11 @@ def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
             res.skip = str(e)
             return
         except Exception as e:
-            res.errors.append('pseudo-code raised {}: {}'.format(type(e).__name__, e))
+            import traceback
+            frames = traceback.extract_tb(e.__traceback__)       # the deepest pseudo-code function it happened in
+            here = os.path.dirname(os.path.abspath(__file__))
+            where = next((f for f in reversed(frames) if not os.path.abspath(f.filename).startswith(here)), frames[-1])
+            res.errors.append('pseudo-code raised {}: {} (in {})'.format(type(e).__name__, e, where.name))
             return
 
         cpu = CPU(bytearray(data))

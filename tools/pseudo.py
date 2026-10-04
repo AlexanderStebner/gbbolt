@@ -216,6 +216,8 @@ def make_helpers(mem):
         'fill': (fill, fill.__doc__),
         'wait_ly': (_hw('wait_ly', 'polls rLY'), 'Busy-wait until the LCD reaches scanline n (rLY == n)'),
         'wait_hblank': (_hw('wait_hblank', 'polls rSTAT'), 'Busy-wait until the LCD is in HBlank (rSTAT mode 0)'),
+        'wait_vblank': (_hw('wait_vblank', 'polls rSTAT'), 'Busy-wait until the LCD is in VBlank (rSTAT mode 1)'),
+        'wait_serial': (_hw('wait_serial', 'polls rSC'), 'Busy-wait until the link cable transfer is done (rSC bit 7 clear)'),
         'wait_vblank_flag': (_hw('wait_vblank_flag', 'waits for an interrupt'),
                              'Sleep until the VBlank interrupt has set hVBlankDone'),
         'read_buttons': (_hw('read_buttons', 'reads rP1'),

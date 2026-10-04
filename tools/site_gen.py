@@ -238,6 +238,66 @@ def render_sprites(project, count):
     return out
 
 
+def screen_strings(project, rom, a, params):
+    """`strings`: a BG map address (word), tiles, then `next` ($FE) and another address, ..., `end` ($FF).
+    Returns ({(row, col): tile}, end address)."""
+    nxt, stop = resolve_value(project, params.get('next', '$FE')), resolve_value(project, params.get('end', '$FF'))
+    cells = {}
+    dest = rom[a] | rom[a + 1] << 8
+    a += 2
+    while True:
+        b = rom[a]
+        a += 1
+        if b == stop:
+            return cells, a
+        if b == nxt:
+            dest = rom[a] | rom[a + 1] << 8
+            a += 2
+            continue
+        cells[((dest & 0x3FF) >> 5, dest & 0x1F)] = b
+        dest += 1
+
+
+def screen_rle(project, rom, a, params):
+    """`rlemap`: a BG map address (word), then runs: $80 tile count = count tiles counting up from tile;
+    n < $80 = the next byte n times; $80 | n = n bytes as they are; 0 ends."""
+    cells = {}
+    dest = rom[a] | rom[a + 1] << 8
+    a += 2
+    out = []
+    while rom[a]:
+        n = rom[a]
+        if n == 0x80:
+            t, k = rom[a + 1], rom[a + 2]
+            out += [(t + i) & 0xFF for i in range(k)]
+            a += 3
+        elif n < 0x80:
+            out += [rom[a + 1]] * n
+            a += 2
+        else:
+            out += list(rom[a + 1:a + 1 + (n & 0x7F)])
+            a += 1 + (n & 0x7F)
+    for i, t in enumerate(out):
+        d = dest + i
+        cells[((d & 0x3FF) >> 5, d & 0x1F)] = t
+    return cells, a + 1
+
+
+def screen_tilemap(project, cells, params, start, end):
+    """The rectangle of BG map cells that strings / RLE data cover, as a tilemap asset."""
+    blank = resolve_value(project, params.get('blank', '$7F'))
+    if not cells:
+        cells = {(0, 0): blank}
+    r0, r1 = min(r for r, _ in cells), max(r for r, _ in cells)
+    c0, c1 = min(c for _, c in cells), max(c for _, c in cells)
+    if params.get('screen'):                     # the whole 20 x 18 screen
+        r0, c0, r1, c1 = 0, 0, max(r1, 17), max(c1, 19)
+    w, h = c1 - c0 + 1, r1 - r0 + 1
+    grid = [cells.get((r, c), blank) for r in range(r0, r1 + 1) for c in range(c0, c1 + 1)]
+    return {'type': 'tilemap', 'params': dict(params, width=str(w), height=str(h)),
+            'bytes': base64.b64encode(bytes(grid)).decode(), 'length': end - start}
+
+
 def collect_assets(project):
     assets, tilesets = [], {}
     rom = project.rom
@@ -251,7 +311,7 @@ def collect_assets(project):
         if not a:
             continue
         params = {k: v for k, v in a.items() if k not in ('type', 'doc')}
-        if a['type'] in ('tilemap', 'rows'):     # BG tile numbers: 8000 = unsigned from $8000, 8800 = signed around $9000 (LCDC bit 4)
+        if a['type'] in ('tilemap', 'rows', 'strings', 'rlemap'):     # BG tile numbers: 8000 = unsigned from $8000, 8800 = signed around $9000 (LCDC bit 4)
             params.setdefault('addressing', str(build.GAME.get('tile_addressing', '8000')))
         if 'range' in params:
             lo, hi = params['range'].split('-')
@@ -283,6 +343,9 @@ def collect_assets(project):
             item['params'] = dict(params, width=str(width), height=str(len(grid)))
             item['bytes'] = base64.b64encode(bytes(sum(grid, []))).decode()
             item['length'] = end - start
+        if a['type'] in ('strings', 'rlemap'):     # drawn at BG map addresses: shown as the screen area they cover
+            cells, end = (screen_strings if a['type'] == 'strings' else screen_rle)(project, rom, start, params)
+            item.update(screen_tilemap(project, cells, params, start, end))
         if 'tiles' in params:
             keys = params['tiles'].split('|')
             for key in keys:
@@ -337,7 +400,8 @@ def check_intro(data):
         if m.group(2) and re.match(r'(https?:|#/)', name):
             continue
         # `code` that doesn't look like a name ($9C, rst $30, x + 1) is meant as code
-        if name not in known and (m.group(2) or re.fullmatch(r'[A-Za-z_][\w/]*', name)):
+        looks_like_name = re.fullmatch(r'[A-Za-z_][\w/]*', name) and not re.fullmatch(r'[a-z]+', name)   # not `rst`, `call`
+        if name not in known and (m.group(2) or looks_like_name):
             print('intro.md: no function, variable, asset or folder named', name)
 
 
@@ -406,6 +470,10 @@ def generate(project):
         edges_from.setdefault(a, []).append((b, k))
         edges_to.setdefault(b, []).append((a, k))
 
+    from verify import Result
+    for u in p.units:                       # `page` after edits: units the last verify hasn't seen
+        if u.name not in results:
+            results[u.name] = Result(u)
     units = [unit_data(project, u, results[u.name], edges_from, edges_to) for u in p.units]
     paths = unit_paths(project)
     for d in units:

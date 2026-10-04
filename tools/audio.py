@@ -64,6 +64,9 @@ def load_config():
         if 'count' in k:                       # a sound queue: its length byte, set to 1 with the request
             k['count'] = addr(k['count'])
         k['ids'] = item_ids(k)
+    # 'pokes': {"music 3": {"wTempo": 80}} - RAM the game keeps setting while that sound plays
+    cfg['pokes'] = {key: {addr(n): v for n, v in p.items()}
+                    for key, p in cfg.get('pokes', {}).items() if not key.startswith('_')}
     mc = cfg.get('music_channels')
     if mc:
         mc['structs'] = [addr(s) for s in mc['structs']]
@@ -644,7 +647,7 @@ def main():
     index_path = os.path.join(outdir, 'index.json')
     index = {(e['kind'], e['id']): e for e in json.load(open(index_path))} if len(items) == 1 and os.path.exists(index_path) else {}
     for kind, n in items:
-        res = render(rom, syms, cfg, kind, n)
+        res = render(rom, syms, cfg, kind, n, pokes=cfg['pokes'].get('{} {}'.format(kind, n)))
         if res is None:
             continue
         mix, stems, timeline, secs, loop = res

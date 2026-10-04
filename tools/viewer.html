@@ -153,6 +153,9 @@ a.k-fn, a.k-var { text-decoration: none; } a.k-fn:hover, a.k-var:hover { text-de
 .bchap p { margin: 4px 0 0; color: var(--muted); }
 #bookbody { flex: 1; overflow: auto; padding: 18px 28px 80px; }
 #bookbody .intro { max-width: 820px; color: var(--muted); margin-bottom: 18px; }
+.imgwrap.scroll { max-width: 100%; overflow-x: auto; padding-bottom: 6px; }
+.imark { position: absolute; padding: 0; border: 2px solid var(--accent); box-shadow: 0 0 0 1px rgba(255, 255, 255, .8); background: transparent; border-radius: 3px; cursor: pointer; opacity: .8; }
+.imark:hover { opacity: 1; background: rgba(37, 99, 235, .15); }
 .bfn { max-width: 980px; margin: 0 0 26px; scroll-margin-top: 10px; }
 .bfn h2 { font: 600 15px var(--mono); margin: 0 0 4px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .bfn h2 .ad { color: var(--muted); font-weight: 400; }
@@ -219,6 +222,7 @@ table.grid tr.sel td { background: color-mix(in srgb, var(--accent) 14%, transpa
 .acard .cap div { color: var(--muted); }
 canvas.px { image-rendering: pixelated; image-rendering: crisp-edges; }
 .adetail { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.adetail > div:first-child { min-width: 0; max-width: 100%; }
 .astage { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: inline-block; max-width: 100%; overflow: auto; }
 .ameta { min-width: 260px; flex: 1; max-width: 560px; font-size: 13px; }
 .hexdump { font: 12px/1.5 var(--mono); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; overflow: auto; max-width: 100%; white-space: pre; }
@@ -1558,17 +1562,42 @@ function drawOAM(a, el, size) {
   if (size === 'large') tipLine(el, `${e.length} OAM entries (y, x, tile, attributes) copied straight into the shadow OAM · tile data from running ${a.tileset} · checkerboard = transparent`);
 }
 // ---- display parts for game-defined assets (<game>/assets/*.py, see tools/assets.py)
+// pixels: base64 shade indices (0-3, 255 = transparent); packed: 'zlib' when they are
+// deflated (big pictures such as whole level maps). marks: [{x, y, w, h, label, text}]
+// in pixels of the picture, shown as boxes to hover and click on (large view only).
+async function imagePixels(a) {
+  const raw = b64(a.pixels);
+  if (a.packed !== 'zlib') return raw;
+  const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
 function drawImage(a, el, size) {
-  const px = b64(a.pixels), W = a.width, H = a.height;
-  const c = makeCanvas(W, H, size === 'large' ? (a.scale || 3) : 0), ctx = c.getContext('2d');
-  const img = ctx.createImageData(W, H), pal = PALETTES[palName].map(hexRGB);
-  for (let i = 0; i < W * H; i++) {
-    const v = px[i];
-    if (v === 255) continue;
-    img.data[4 * i] = pal[v][0]; img.data[4 * i + 1] = pal[v][1]; img.data[4 * i + 2] = pal[v][2]; img.data[4 * i + 3] = 255;
-  }
-  ctx.putImageData(img, 0, 0);
-  el.appendChild(c);
+  const W = a.width, H = a.height, large = size === 'large';
+  const scale = large ? (a.scale || 3) : 0;
+  const c = makeCanvas(W, H, scale), ctx = c.getContext('2d');
+  const wrap = document.createElement('div');
+  wrap.className = 'imgwrap' + (large && a.scroll ? ' scroll' : '');
+  const inner = document.createElement('div');
+  inner.style.cssText = 'position:relative;display:inline-block;line-height:0';
+  inner.appendChild(c); wrap.appendChild(inner); el.appendChild(wrap);
+  imagePixels(a).then(px => {
+    const img = ctx.createImageData(W, H), pal = PALETTES[palName].map(hexRGB);
+    for (let i = 0; i < W * H; i++) {
+      const v = px[i];
+      if (v === 255) continue;
+      img.data[4 * i] = pal[v][0]; img.data[4 * i + 1] = pal[v][1]; img.data[4 * i + 2] = pal[v][2]; img.data[4 * i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  });
+  if (!large || !a.marks || !a.marks.length) return;
+  const note = tipLine(el, 'Hover or click a marked spot.');
+  a.marks.forEach(m => {
+    const b = document.createElement('button');
+    b.className = 'imark'; b.title = m.label + (m.text ? ' — ' + m.text : '');
+    b.style.cssText = `left:${m.x * scale}px;top:${m.y * scale}px;width:${m.w * scale}px;height:${m.h * scale}px`;
+    b.onclick = () => { note.innerHTML = `<b style="color:var(--text)">${esc(m.label)}</b>` + (m.text ? ' — ' + hl(m.text, 'doc') : ''); };
+    inner.appendChild(b);
+  });
 }
 // a video of the game's own frames; lanes (button presses, events) scroll underneath in sync
 function drawVideo(a, el, size) {

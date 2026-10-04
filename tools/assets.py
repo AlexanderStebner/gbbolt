@@ -11,7 +11,10 @@ in the game's assets/ folder with
 
 Each asset is a dict made of the viewer's display parts (the `type`):
 
-    image      pixels: {'width', 'height', 'pixels': base64 shade indices (0-3, 255 = transparent)}
+    image      {'width', 'height', 'pixels': base64 shade indices (0-3, 255 = transparent)}
+               'packed': 'zlib' with ctx.packed_pixels(rows) for big pictures; 'scale' (large view),
+               'scroll': True (scrolls sideways), 'marks': [{'x', 'y', 'w', 'h', 'label', 'text'}]
+               (pixels of the picture: boxes to hover / click, text may name labels)
     video      {'file': url from ctx.video(...), 'width', 'height', 'fps',
                 'lanes': [{'name', 'spans': [[from, to], ...]}]}   frame spans, drawn under the video
     chart      {'kind': 'line' | 'step' | 'bar', 'x': label, 'y': label, 'xticks': [...] optional,
@@ -119,6 +122,13 @@ class AssetContext:
     def pixels(rows):
         """base64 of shade-index rows (for an 'image' part)."""
         return base64.b64encode(b''.join(bytes(r) for r in rows)).decode()
+
+    @staticmethod
+    def packed_pixels(rows):
+        """Deflated shade-index rows, base64 (an 'image' part with 'packed': 'zlib'):
+        for big pictures like whole level maps."""
+        import zlib
+        return base64.b64encode(zlib.compress(b''.join(bytes(r) for r in rows), 9)).decode()
 
 
 def _key(project, src, plugin_dir):
