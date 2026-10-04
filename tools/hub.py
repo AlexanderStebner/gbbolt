@@ -97,28 +97,47 @@ a { color: var(--accent); text-decoration: none; }
 section { padding: 40px 0 8px; }
 h2 { font: 700 13px var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 16px; }
 
-/* game cards */
-.games { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 18px; }
-.game { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; transition: transform .15s, box-shadow .15s, border-color .15s; color: var(--text); }
-.game:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0, 0, 0, .08); border-color: var(--accent2); }
-.shot { background: var(--bezel); padding: 18px 26px 20px; display: grid; place-items: center; }
-/* exactly 2x (320x288): whole-pixel scaling keeps the pixel art crisp */
-.shot img, .shot .blank { width: 320px; max-width: 100%; aspect-ratio: 10 / 9; image-rendering: pixelated; border-radius: 4px; display: block; background: var(--screen); }
-.body { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 12px; flex: 1; }
-.title { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.title h3 { margin: 0; font: 700 21px var(--sans); }
-.title span { color: var(--muted); font-size: 13px; white-space: nowrap; }
-.desc { color: var(--muted); font-size: 14px; margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.progress { display: flex; align-items: center; gap: 12px; }
-.pct { font: 800 26px var(--sans); font-variant-numeric: tabular-nums; min-width: 3.2em; }
-.pct small { display: block; font: 500 11.5px var(--sans); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.bar { flex: 1; height: 10px; border-radius: 5px; background: var(--panel2); overflow: hidden; display: flex; }
+/* the game library: one compact row per game (or a grid of small screens), with search and sort */
+.libbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 14px; }
+.libbar input, .libbar select { font: 14px var(--sans); color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+.libbar input { flex: 1; min-width: 180px; }
+.libbar .count { color: var(--muted); font-size: 13px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.seg button { font: 13px var(--sans); color: var(--muted); background: var(--panel); border: 0; padding: 8px 12px; cursor: pointer; }
+.seg button.on { background: var(--accent); color: var(--panel); }
+.games { display: flex; flex-direction: column; gap: 8px; }
+.game { display: grid; grid-template-columns: 80px minmax(0, 1fr) 270px auto; gap: 18px; align-items: center; padding: 10px 14px 10px 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; color: var(--text); transition: border-color .15s, box-shadow .15s; }
+.game:hover { border-color: var(--accent2); box-shadow: 0 6px 20px rgba(0, 0, 0, .06); }
+.game[hidden] { display: none; }
+.shot { width: 80px; height: 72px; border-radius: 6px; overflow: hidden; background: var(--screen); }
+.shot img, .shot .blank { width: 100%; height: 100%; display: block; background: var(--screen); }
+.info { min-width: 0; }
+.title { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; }
+.title h3 { margin: 0; font: 700 17px var(--sans); }
+.title span { color: var(--muted); font-size: 13px; }
+.desc { color: var(--muted); font-size: 13.5px; margin: 3px 0 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.progress { display: flex; flex-direction: column; gap: 5px; }
+.nums { display: flex; justify-content: space-between; gap: 8px; font: 12.5px var(--mono); color: var(--muted); white-space: nowrap; }
+.nums b { color: var(--text); font-weight: 700; }
+.bar { height: 8px; border-radius: 4px; background: var(--panel2); overflow: hidden; display: flex; }
 .bar i { display: block; height: 100%; }
-.stats { display: flex; flex-wrap: wrap; gap: 6px; }
-.stat { font: 12.5px var(--mono); padding: 3px 9px; border-radius: 6px; background: var(--panel2); color: var(--muted); }
-.stat b { color: var(--text); font-weight: 600; }
-.actions { display: flex; gap: 10px; align-items: center; margin-top: auto; padding-top: 4px; }
-.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 10px; font-weight: 600; font-size: 14px; }
+.actions { display: flex; gap: 8px; align-items: center; }
+.empty { color: var(--muted); padding: 18px 4px; }
+/* grid view: small screens with the name under them */
+.games.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.games.grid .game { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 8px 8px 10px; align-items: start; }
+.games.grid .shot { width: 100%; height: auto; aspect-ratio: 10 / 9; }
+.games.grid .shot img { image-rendering: pixelated; }
+.games.grid .desc, .games.grid .actions, .games.grid .nums.more, .games.grid .nums span + span { display: none; }
+.games.grid .title h3 { font-size: 14.5px; }
+.games.grid .title span { font-size: 12px; }
+@media (max-width: 820px) {
+  .game { grid-template-columns: 64px minmax(0, 1fr); gap: 6px 12px; }
+  .shot { width: 64px; height: 58px; grid-row: span 2; align-self: start; }
+  .actions { display: none; }
+  .games.grid .shot { grid-row: auto; }
+}
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 9px; font-weight: 600; font-size: 13.5px; }
 .btn.main { background: var(--accent); color: var(--panel); }
 .btn.main:hover { filter: brightness(1.08); }
 .btn.ghost { color: var(--muted); border: 1px solid var(--border); }
@@ -127,7 +146,7 @@ h2 { font: 700 13px var(--sans); text-transform: uppercase; letter-spacing: .08e
 /* features */
 .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 860px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .features { grid-template-columns: minmax(0, 1fr); } .games { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .features { grid-template-columns: minmax(0, 1fr); } }
 .feature { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; display: flex; gap: 12px; align-items: flex-start; }
 .feature .ic { color: var(--accent); background: var(--panel2); border-radius: 10px; padding: 8px; width: 40px; height: 40px; }
 .feature b { display: block; font-size: 15px; }
@@ -165,9 +184,21 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: s
 <main class="wrap">
   <section>
     <h2>Games</h2>
-    <div class="games">
+    <div class="libbar">
+      <input id="q" type="search" placeholder="Search by name, publisher, year" aria-label="Search games">
+      <select id="sort" aria-label="Sort by">
+        <option value="title">Name</option>
+        <option value="added">Newest first</option>
+        <option value="year">Release year</option>
+        <option value="done">Most verified</option>
+      </select>
+      <span class="seg" id="view"><button type="button" data-v="list" class="on">List</button><button type="button" data-v="grid">Grid</button></span>
+      <span class="count" id="count">{count} games</span>
+    </div>
+    <div class="games" id="games">
 {cards}
     </div>
+    <div class="empty" id="empty" hidden>No game matches.</div>
   </section>
   <section>
     <h2>In every game</h2>
@@ -192,19 +223,59 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: s
 </html>
 '''
 
-CARD = '''      <a class="game" href="{id}/">
+CARD = '''      <a class="game" href="{id}/" data-title="{key}" data-year="{year}" data-added="{added}" data-done="{done}" data-text="{search}">
         <div class="shot">{shot}</div>
-        <div class="body">
+        <div class="info">
           <div class="title"><h3>{title}</h3><span>{meta}</span></div>
           <p class="desc">{desc}</p>
-          <div class="progress">
-            <div class="pct">{pct}%<small>translated</small></div>
-            <div class="bar" title="{annotated} of {functions} functions have pseudo-code: {verified} verified by differential tests, {checked} checked (hardware access, can't run in isolation)"><i style="width:{pv}%;background:var(--ok)"></i><i style="width:{pc}%;background:var(--accent2)"></i></div>
-          </div>
-          <div class="stats"><span class="stat"><b>{functions}</b> functions</span><span class="stat" title="the pseudo-code gave identical results to the original code on 64 random machine states"><b>{verified}</b> test-verified</span><span class="stat"><b>{sounds}</b> sounds</span><span class="stat"><b>{assets}</b> assets</span></div>
-          <div class="actions"><span class="btn main">Open</span><span class="btn ghost" data-href="https://github.com/{repo}">Source</span></div>
         </div>
+        <div class="progress" title="{annotated} of {functions} functions have pseudo-code: {verified} verified by differential tests (identical results to the original code on 64 random machine states), {checked} checked (hardware access, can't run in isolation)">
+          <div class="nums"><span><b>{pct}%</b> translated</span><span>{functions} functions</span></div>
+          <div class="bar"><i style="width:{pv}%;background:var(--ok)"></i><i style="width:{pc}%;background:var(--accent2)"></i></div>
+          <div class="nums more"><span><b>{verified}</b> verified</span><span>{sounds} sounds · {assets} assets</span></div>
+        </div>
+        <div class="actions"><span class="btn main">Open</span><span class="btn ghost" data-href="https://github.com/{repo}">Source</span></div>
       </a>'''
+
+# search, sort and the list/grid switch; the last choices are remembered per browser
+LIBRARY_JS = '''<script>
+(() => {
+  const list = document.getElementById('games'), rows = [...list.children];
+  const q = document.getElementById('q'), sort = document.getElementById('sort');
+  const count = document.getElementById('count'), empty = document.getElementById('empty');
+  const load = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const byTitle = (a, b) => a.dataset.title.localeCompare(b.dataset.title);
+  const orders = {
+    title: byTitle,
+    added: (a, b) => b.dataset.added - a.dataset.added,
+    year: (a, b) => (a.dataset.year || 9999) - (b.dataset.year || 9999) || byTitle(a, b),
+    done: (a, b) => b.dataset.done - a.dataset.done || byTitle(a, b),
+  };
+  function update() {
+    const words = q.value.toLowerCase().split(/\\s+/).filter(Boolean);
+    let shown = 0;
+    rows.sort(orders[sort.value] || byTitle).forEach(r => {
+      r.hidden = !words.every(w => r.dataset.text.includes(w));
+      shown += !r.hidden;
+      list.appendChild(r);
+    });
+    count.textContent = (shown < rows.length ? shown + ' of ' : '') + rows.length + (rows.length === 1 ? ' game' : ' games');
+    empty.hidden = shown > 0;
+  }
+  function view(v) {
+    list.classList.toggle('grid', v === 'grid');
+    document.querySelectorAll('#view button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  }
+  document.querySelectorAll('#view button').forEach(b => b.addEventListener('click', () => { view(b.dataset.v); save('gbbolt-hub-view', b.dataset.v); }));
+  q.addEventListener('input', update);
+  sort.addEventListener('change', () => { save('gbbolt-hub-sort', sort.value); update(); });
+  if (orders[load('gbbolt-hub-sort')]) sort.value = load('gbbolt-hub-sort');
+  view(load('gbbolt-hub-view') === 'grid' ? 'grid' : 'list');
+  update();
+})();
+</script>
+'''
 
 
 def main():
@@ -212,7 +283,7 @@ def main():
     site = sys.argv[2]
     engine = os.environ.get('GBBOLT_ENGINE_REPO', 'AlexanderStebner/gbbolt')
     cards = []
-    for g in games:
+    for added, g in enumerate(games):     # games.json lists the games in the order they were added
         path = os.path.join(site, g['id'], 'summary.json')
         if not os.path.exists(path):
             print('skipping {} (not built)'.format(g['id']))
@@ -226,13 +297,16 @@ def main():
             id=html.escape(g['id']), title=html.escape(g['title']), desc=html.escape(g.get('description', '')),
             repo=html.escape(g['repo']), shot=shot, meta=html.escape(meta), pct=round(100 * s['annotated'] / n),
             pv=100 * s['verified'] / n, pc=100 * s['checked'] / n,
+            key=html.escape(g['title'].lower()), year=s.get('year') or '', added=added, done=round(1000 * s['verified'] / n),
+            search=html.escape(' '.join(str(x) for x in (g['title'], g['id'], meta, g.get('description', ''))).lower()),
             **{k: v for k, v in s.items() if k in ('verified', 'checked', 'functions', 'annotated', 'sounds', 'assets')}))
     features = '\n'.join('      <div class="feature">{}<div><b>{}</b><span>{}</span></div></div>'.format(
         icon(i), html.escape(t), html.escape(d)) for i, t, d in FEATURES)
     steps = '\n'.join('      <div class="step"><b>{}</b><span>{}</span></div>'.format(html.escape(t), html.escape(d)) for t, d in STEPS)
-    out = (PAGE.replace('{cards}', '\n'.join(cards)).replace('{features}', features).replace('{steps}', steps)
+    out = (PAGE.replace('{cards}', '\n'.join(cards)).replace('{count}', str(len(cards))).replace('{features}', features).replace('{steps}', steps)
            .replace('{github}', icon('github', 18)).replace('{engine}', html.escape(engine)))
     # the "Source" button sits inside the card link: open the repository instead of the game
+    out = out.replace('</body>', LIBRARY_JS + '</body>')
     out = out.replace('</body>', '<script>document.querySelectorAll("[data-href]").forEach(b => b.addEventListener("click", '
                       'e => { e.preventDefault(); e.stopPropagation(); window.open(b.dataset.href, "_blank", "noopener"); }));</script>\n</body>')
     open(os.path.join(site, 'index.html'), 'w', encoding='utf-8', newline='\n').write(out)
