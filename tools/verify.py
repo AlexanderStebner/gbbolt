@@ -13,7 +13,7 @@ import re
 
 from asmparse import unit_sig
 from pseudo import Env, Memory, NotModeled, REGS16
-from sm83 import CPU, StepLimit, FC, FZ
+from sm83 import CPU, MBC, StepLimit, FC, FZ
 
 import build  # noqa: E402
 
@@ -57,16 +57,19 @@ def split_regs(regs):
 
 
 def scalar_vars(env):
-    return {n: v for n, v in env.vars.items() if v['size'] in (1, 2) and '[' not in v['type']
-            and v['base'] in ('u8', 'u16')}
+    if getattr(env, '_scalars', None) is None:
+        env._scalars = {n: v for n, v in env.vars.items() if v['size'] in (1, 2) and '[' not in v['type']
+                        and v['base'] in ('u8', 'u16')}
+    return env._scalars
 
 
 def setup_namespace(data, rng, env):
     mem = Memory(data)
     ns = {'rng': rng, 'mem': mem}
     ns.update(env.consts)
+    scalars = scalar_vars(env)
     for n, v in env.vars.items():
-        ns[n] = v['addr'] if n not in scalar_vars(env) else None
+        ns[n] = v['addr'] if n not in scalars else None
 
     def rand_ram(n=1, lo=FREE_RAM[0], hi=FREE_RAM[1]):
         """Random address with n bytes of free WRAM behind it."""
@@ -133,6 +136,9 @@ def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
         rng = random.Random('{}:{}'.format(unit.name, t))
         data = bytearray(rng.randbytes(0x10000))
         data[0:0x8000] = rom[0:0x8000]
+        bank = build.bank_of(unit.start) if build.BANKED else 1
+        if build.BANKED:                         # the function's own bank is switched in
+            data[0x4000:0x8000] = rom[bank * 0x4000:(bank + 1) * 0x4000]
         ns = setup_namespace(data, rng, env)
         svars = scalar_vars(env)
         try:
@@ -173,6 +179,7 @@ def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
 
         # pseudo-code first: if it reaches something unmodelled we stop early
         env.mem.data = bytearray(data)
+        env.mem.mbc = MBC(rom, env.mem.data, bank) if build.BANKED else None
         env.mem.reads, env.mem.writes = set(), set()
         try:
             ret = fn(**args)
@@ -187,12 +194,13 @@ def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
             res.errors.append('pseudo-code raised {}: {} (in {})'.format(type(e).__name__, e, where.name))
             return
 
-        cpu = CPU(bytearray(data))
+        cpu_mem = bytearray(data)
+        cpu = CPU(cpu_mem, MBC(rom, cpu_mem, bank) if build.BANKED else None)
         for r, v in regs.items():
             setattr(cpu, r, v)
         cpu.sp = STACK_TOP
         try:
-            cpu.call(unit.start)
+            cpu.call(build.cpu_addr(unit.start))
         except (StepLimit, RuntimeError) as e:
             res.errors.append('original code did not return: {}'.format(e))
             return
@@ -217,6 +225,8 @@ def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
             got = norm(reg, ret[i] if ret is not None and i < len(ret) else 0)
             if want != got:
                 mism.append((reg, want, got))
+        if build.BANKED and cpu.mbc.rom_bank != env.mem.mbc.rom_bank:
+            mism.append(('rom bank', cpu.mbc.rom_bank, env.mem.mbc.rom_bank))
         if diffs or mism:
             res.example = {
                 'trial': t,
@@ -256,7 +266,7 @@ def header_check(unit, sig, analysis, res):
             res.info.append('observed clobbers: {}'.format(', '.join(sorted(clob))))
 
     refs = analysis.refs.get(unit.name, {'reads': set(), 'writes': set(), 'ptrs': set()})
-    name = analysis.symbolic
+    name = lambda a: analysis.symbolic(a, unit.name)    # noqa: E731
     st_reads = {name(a) or '${:04X}'.format(a) for a in refs['reads']}
     st_writes = {name(a) or '${:04X}'.format(a) for a in refs['writes']}
     st_ptrs = {name(a) or '${:04X}'.format(a) for a in refs['ptrs']}

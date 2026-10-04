@@ -12,10 +12,11 @@ TERMINAL = ('jump', 'ret', 'jphl')
 def load_io_names(src_dir):
     """hardware.inc register names: (address -> preferred name, name -> address)."""
     by_addr, by_name = {}, {}
-    path = os.path.join(src_dir, 'hardware.inc')
-    if os.path.exists(path):
+    path = next((p for p in (os.path.join(src_dir, 'hardware.inc'), os.path.join(src_dir, 'constants', 'hardware.inc'))
+                 if os.path.exists(p)), None)
+    if path:
         for line in open(path, encoding='utf-8', errors='replace'):
-            m = re.match(r'^\s*DEF\s+(r\w+)\s+EQU\s+\$([0-9A-Fa-f]{4})\b', line)
+            m = re.match(r'^\s*DEF\s+(r\w+)\s+EQU\s+\$([0-9A-Fa-f]{4})\b', line, re.I)
             if m:
                 a = int(m.group(2), 16)
                 by_addr.setdefault(a, m.group(1))
@@ -25,6 +26,38 @@ def load_io_names(src_dir):
 
 # `rst $xx` followed by a table of addresses (game.json: jump_table_rst; None = not used)
 JUMP_RST = build.GAME['jump_table_rst']
+
+
+class BankView:
+    """The ROM as the CPU sees it with one bank mapped in at $4000-$7FFF."""
+    def __init__(self, rom, bank):
+        self.rom, self.base = rom, max(bank, 1) * 0x4000 - 0x4000
+
+    def __getitem__(self, a):
+        a &= 0xFFFF
+        if a < 0x4000:
+            return self.rom[a]
+        if a < 0x8000 and self.base + a < len(self.rom):
+            return self.rom[self.base + a]
+        return 0
+
+
+def decode_line(rom, ln):
+    """The instructions of a code line (a macro line can hold several), decoded at
+    CPU addresses with the line's bank mapped in."""
+    bank = build.bank_of(ln.addr)
+    view = BankView(rom, bank)
+    a, end, out = build.cpu_addr(ln.addr), build.cpu_addr(ln.addr) + max(ln.size, 1), []
+    while a < end:
+        insn = decode(view, a)
+        out.append(insn)
+        a += insn.length
+        if not ln.macro:
+            break
+    return out
+
+
+IDENT = re.compile(r'[A-Za-z_][\w.]*')
 
 class Analysis:
     def __init__(self, parsed, rom, src_dir):
@@ -40,16 +73,22 @@ class Analysis:
         self.edges = []      # (from, to, kind)
         self.refs = {}       # unit -> {'reads': set(addr), 'writes': set(addr), 'ptrs': set(addr)}
         self.insns = {}      # unit -> [Insn]
+        self.named = {}      # unit -> {address: the variable name its source uses there}
+        self._owner = None
         self.run()
 
     def owner(self, a):
         """The most specific (smallest) variable containing an address."""
-        best = None
-        for v in self.p.vars.values():
-            if v['type'] != 'io' and v['addr'] <= a < v['addr'] + v['size']:
-                if best is None or v['size'] < best['size']:
-                    best = v
-        return best
+        if self._owner is None:
+            self._owner = {}
+            for v in self.p.vars.values():
+                if v['type'] == 'io':
+                    continue
+                for x in range(v['addr'], v['addr'] + min(v['size'], 0x1000)):
+                    best = self._owner.get(x)
+                    if best is None or v['size'] < best['size']:
+                        self._owner[x] = v
+        return self._owner.get(a)
 
     def var_for(self, a):
         v = self.owner(a)
@@ -57,8 +96,11 @@ class Analysis:
             return v['name'] if v['addr'] == a else '{}+{}'.format(v['name'], a - v['addr'])
         return self.io.get(a)
 
-    def symbolic(self, a):
-        """Owner name for an address: variable, IO register, or None."""
+    def symbolic(self, a, unit=None):
+        """Owner name for an address: variable, IO register, or None. In a unit, the
+        name its source uses for that address wins (variables sharing a UNION)."""
+        if unit is not None and a in self.named.get(unit, {}):
+            return self.named[unit][a]
         v = self.owner(a)
         return v['name'] if v else self.io.get(a)
 
@@ -82,11 +124,14 @@ class Analysis:
                 self.tables[u.name] = targets
 
         units = self.p.units
+        unit_names = {u.name: u for u in units}
         for idx, u in enumerate(units):
             if u.kind != 'code':
                 continue
+            bank = build.bank_of(u.start)
             code_lines = [lines[i] for i in u.lines if lines[i].kind == 'insn']
-            ins = [decode(self.rom, ln.addr) for ln in code_lines]
+            pairs = [(insn, ln) for ln in code_lines for insn in decode_line(self.rom, ln)]
+            ins = [insn for insn, _ in pairs]
             self.insns[u.name] = ins
             blank = lambda: {'reads': set(), 'writes': set(), 'ptrs': set()}
             r = self.refs.setdefault(u.name, blank())
@@ -97,24 +142,39 @@ class Analysis:
                     seen.add((to, kind))
                     self.edges.append((u.name, to, kind))
 
-            for k, insn in enumerate(ins):
-                t = insn.target
+            def lin(t):
+                if t >= 0x8000 or (build.BANKED and bank == 0 and t >= 0x4000):
+                    return None                # RAM, or whichever bank home code has switched in
+                return build.linear(bank, t)
+
+            for ln in code_lines:
+                if ln.macro:                   # farcall Foo, predef Foo, homecall Foo...: the labels it names
+                    for w in IDENT.findall(ln.text.split(None, 1)[1] if ' ' in ln.text else ''):
+                        tu = unit_names.get(w)
+                        if tu is not None and tu.kind == 'code':
+                            edge(w, 'far' if build.bank_of(tu.start) not in (0, bank) else 'call')
+            for k, (insn, ln) in enumerate(pairs):
+                t = lin(insn.target) if insn.target is not None else None
                 if insn.kind in ('call', 'ccall', 'rst') and t in self.by_start:
                     edge(self.by_start[t].name, 'call')
                 elif insn.kind in ('jump', 'cjump') and t is not None and not (u.start <= t < u.end):
                     tu = self.unit_at.get(t)
                     if tu:
                         edge(tu.name, 'jump')
-                if insn.kind == 'rst' and t == JUMP_RST and k == len(ins) - 1 and idx + 1 < len(units):
+                if insn.kind == 'rst' and insn.target == JUMP_RST and k == len(ins) - 1 and idx + 1 < len(units):
                     nxt = units[idx + 1]
                     for target in self.tables.get(nxt.name, []):
                         edge(target, 'table')
                 text = insn.text
                 # a fragment linked to another unit's line (`;=@Unit.tag`) counts for that unit
-                xr = code_lines[k].xref
+                xr = ln.xref
                 rr = self.refs.setdefault(xr[0], blank()) if xr else r
                 if insn.imm is not None and insn.imm >= 0x8000:
                     a = insn.imm
+                    for w in IDENT.findall(ln.text):
+                        v = self.p.vars.get(w)
+                        if v is not None and v['addr'] == a:
+                            self.named.setdefault(xr[0] if xr else u.name, {})[a] = w
                     if text.startswith(('ld a, (', 'ldh a, (')):
                         rr['reads'].add(a)
                     elif text.startswith(('ld (', 'ldh (')):
@@ -123,5 +183,5 @@ class Analysis:
                         rr['ptrs'].add(a)
             if ins and ins[-1].kind not in TERMINAL and idx + 1 < len(units):
                 nxt = units[idx + 1]
-                if nxt.kind == 'code':
+                if nxt.kind == 'code' and nxt.start == u.end:
                     edge(nxt.name, 'fallthrough')

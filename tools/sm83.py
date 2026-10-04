@@ -134,6 +134,46 @@ class StepLimit(Exception):
     pass
 
 
+class MBC:
+    """Bank switching for ROMs over 32 KiB (MBC1, MBC3 and MBC5 as games use them):
+    a write to $2000-$3FFF selects the ROM bank, $4000-$5FFF the SRAM bank. The
+    selected banks are copied into the flat 64 KiB memory, so reads stay plain.
+    Cartridges without an MBC ignore the writes."""
+
+    def __init__(self, rom, mem, bank=1):
+        t = rom[0x147] if len(rom) > 0x147 else 0
+        self.kind = ('mbc5' if 0x19 <= t <= 0x1E else 'mbc3' if 0x0F <= t <= 0x13 else
+                     'mbc1' if 1 <= t <= 3 else None)
+        self.rom, self.mem = rom, mem
+        self.banks = max(2, len(rom) // 0x4000)
+        self.rom_bank = 1
+        self.ram_bank = 0
+        self.saved_ram = {}                   # contents of the SRAM banks not switched in
+        if self.kind:
+            self.map(bank)
+
+    def map(self, bank):
+        self.rom_bank = bank % self.banks
+        o = self.rom_bank * 0x4000
+        self.mem[0x4000:0x8000] = self.rom[o:o + 0x4000]
+
+    def write(self, a, v):
+        if not self.kind:
+            return
+        if 0x2000 <= a < 0x4000:
+            if self.kind == 'mbc5':
+                bank = (self.rom_bank & 0x100) | v if a < 0x3000 else (self.rom_bank & 0xFF) | ((v & 1) << 8)
+            elif self.kind == 'mbc3':
+                bank = (v & 0x7F) or 1
+            else:
+                bank = (v & 0x1F) or 1
+            self.map(bank)
+        elif 0x4000 <= a < 0x6000 and v < 0x10 and v != self.ram_bank:
+            self.saved_ram[self.ram_bank] = bytes(self.mem[0xA000:0xC000])
+            self.mem[0xA000:0xC000] = self.saved_ram.get(v, bytes(0x2000))
+            self.ram_bank = v
+
+
 class CPU:
     """A plain SM83 interpreter over a flat 64 KiB memory.
 
@@ -141,8 +181,9 @@ class CPU:
     accesses are recorded so the verifier can see what code really touches.
     """
 
-    def __init__(self, mem):
+    def __init__(self, mem, mbc=None):
         self.mem = mem  # bytearray(0x10000)
+        self.mbc = mbc  # MBC over the same memory, or None (ROM writes are only logged)
         self.a = self.f = self.b = self.c = self.d = self.e = self.h = self.l = 0
         self.sp = 0xDFF0
         self.pc = 0
@@ -229,6 +270,8 @@ class CPU:
             self.io_log.append((a, v & 0xFF))
         if a < 0x8000:
             self.rom_writes.append((a, v & 0xFF))
+            if self.mbc:
+                self.mbc.write(a, v & 0xFF)
             return
         self.writes.add(a)
         self.mem[a] = v & 0xFF

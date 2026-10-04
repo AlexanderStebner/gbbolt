@@ -30,8 +30,9 @@ class Hardware(NotModeled):
 
 
 class Memory:
-    def __init__(self, data):
+    def __init__(self, data, mbc=None):
         self.data = data  # bytearray(0x10000)
+        self.mbc = mbc    # sm83.MBC over the same bytes, for banked games
         self.reads = set()
         self.writes = set()
 
@@ -49,6 +50,10 @@ class Memory:
             return
         a = int(a) & 0xFFFF
         if a < 0x8000:
+            if self.mbc is not None and self.mbc.kind:
+                self.writes.add(a)
+                self.mbc.write(a, v & 0xFF)
+                return
             raise Hardware('write to ROM/MBC register ${:04X}'.format(a))
         self.writes.add(a)
         self.data[a] = v & 0xFF
@@ -136,9 +141,10 @@ class Stub(int):
     """A label without pseudo-code: calling it is not modelled, but in arithmetic
     (`mem[Label + i]`) it is simply its address."""
 
-    def __new__(cls, name, address):
+    def __new__(cls, name, address, bank=None):
         obj = int.__new__(cls, address)
         obj.label = name
+        obj.bank = bank
         return obj
 
     def __call__(self, *a, **k):
@@ -174,6 +180,25 @@ def _bcd_to_int(x):
 
 def make_helpers(mem):
     m16 = Mem16(mem)
+
+    def set_rom_bank(bank):
+        """Switch ROM bank `bank` in at $4000-$7FFF (a write to the MBC's bank register)"""
+        if mem.mbc is None or not mem.mbc.kind:
+            raise Hardware('set_rom_bank (MBC write)')
+        mem[0x2000] = bank
+
+    def rom_bank():
+        """The ROM bank switched in at $4000-$7FFF right now"""
+        if mem.mbc is None or not mem.mbc.kind:
+            raise Hardware('rom_bank (MBC state)')
+        return mem.mbc.rom_bank
+
+    def bank_of_label(label):
+        """The ROM bank a label is in, like the assembler's BANK(): `set_rom_bank(BANK(Foo))`"""
+        bank = getattr(label, 'bank', None)
+        if bank is None:
+            raise NotModeled('BANK() of something that is not a label')
+        return bank
 
     def bcd_read(addr, nbytes):
         """Read a little-endian packed BCD number of nbytes bytes."""
@@ -224,7 +249,9 @@ def make_helpers(mem):
                          'Select a button group through rP1 and read it back (bit set = pressed)'),
         'enable_interrupts': (lambda: None, 'ei (no effect on memory; not modelled further)'),
         'disable_interrupts': (lambda: None, 'di (no effect on memory; not modelled further)'),
-        'set_rom_bank': (_hw('set_rom_bank', 'MBC write'), 'Write the ROM bank register'),
+        'set_rom_bank': (set_rom_bank, set_rom_bank.__doc__),
+        'rom_bank': (rom_bank, rom_bank.__doc__),
+        'BANK': (bank_of_label, bank_of_label.__doc__),
         'pop_return_address': (_hw('pop_return_address', 'stack manipulation'),
                                'Remove the return address from the stack and return it'),
         'goto': (_hw('goto', 'tail jump'), 'Jump to an address (does not return here)'),
@@ -440,7 +467,8 @@ class Env:
                 self.compile(u)
 
     def stub(self, name):
-        return Stub(name, self.syms.get(name, 0))
+        import build
+        return Stub(name, self.syms.get(name, 0), build.SYM_BANK.get(name))
 
     def compile(self, unit):
         src = function_source(unit)

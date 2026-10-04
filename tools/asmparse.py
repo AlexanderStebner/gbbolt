@@ -87,6 +87,9 @@ class Line:
         self.comment = ''
         self.group = 0
         self.xref = None       # (unit, group) for lines linked with `;=@Unit.tag`
+        self.bank = None       # the bank the assembler put it in
+        self.macro = None      # name of the macro this line invokes, if any
+        self.datakind = False
 
 
 class Unit:
@@ -189,35 +192,122 @@ def is_unit_label(name, colons='::'):
     return not name.startswith('.') and not name.startswith('jr_') and colons == '::'
 
 
+SM83 = {'ld', 'ldh', 'ldi', 'ldd', 'add', 'adc', 'sub', 'sbc', 'and', 'or', 'xor', 'cp', 'inc', 'dec', 'daa',
+        'cpl', 'ccf', 'scf', 'nop', 'halt', 'stop', 'di', 'ei', 'rlca', 'rla', 'rrca', 'rra', 'rlc', 'rl', 'rrc',
+        'rr', 'sla', 'sra', 'srl', 'swap', 'bit', 'set', 'res', 'jp', 'jr', 'call', 'ret', 'reti', 'rst', 'push', 'pop'}
+DATA = {'db', 'dw', 'dl', 'ds', 'incbin'}
+DIRECTIVES = {'section', 'endsection', 'include', 'def', 'redef', 'charmap', 'newcharmap', 'setcharmap', 'pushc',
+              'popc', 'assert', 'static_assert', 'export', 'macro', 'endm', 'if', 'elif', 'else', 'endc', 'rept',
+              'for', 'endr', 'break', 'load', 'endl', 'union', 'nextu', 'endu', 'pushs', 'pops', 'opt', 'pusho',
+              'popo', 'align', 'println', 'print', 'warn', 'fail', 'purge', 'shift', 'rsreset', 'rsset'}
+
+
+def macro_kinds(lines):
+    """Macro name -> 'code' if its body assembles instructions (directly or through
+    other code macros), else 'data'. Macros come from the walked source and the
+    `-P` prelude files."""
+    import measure
+    bodies = {}
+    texts = [s.raw for s in lines]
+    for f in sorted(measure.prelude_files()):
+        texts += open(os.path.join(build.SRC, f), encoding='utf-8', errors='replace').read().split('\n')
+    cur = None
+    for raw in texts:
+        code = measure.code_part(raw).strip()
+        m = re.match(r'^MACRO\s+(\w+)', code, re.I) or re.match(r'^(\w+):?\s+MACRO\b', code, re.I)
+        if m:
+            cur = bodies.setdefault(m.group(1), set())
+            continue
+        if re.match(r'^ENDM\b', code, re.I):
+            cur = None
+            continue
+        if cur is not None and code:
+            w = re.sub(r'^[.\w]+:+\s*', '', code).split(None, 1)
+            if w:
+                cur.add(w[0].lower())
+    kinds = {n: 'code' if b & SM83 else 'data' for n, b in bodies.items()}
+    changed = True
+    while changed:
+        changed = False
+        for n, b in bodies.items():
+            if kinds[n] == 'data' and any(kinds.get(x) == 'code' for x in b):
+                kinds[n] = 'code'
+                changed = True
+    return {n.lower(): k for n, k in kinds.items()}
+
+
+def ram_from_labels(p):
+    """RAM variables from the labels in RAM sections (pret style: `wFoo:: ds 2`, comments
+    above or beside them). Size: up to the next label; arrays unless one byte."""
+    labs = p.ram_labels
+    for i, (name, addr, bank, cmt, li, own) in enumerate(labs):
+        if name in p.vars:
+            continue
+        nxt = [lab[1] for lab in labs[i + 1:i + 40] if lab[1] > addr]
+        size = own or max(1, min(min(nxt) - addr if nxt else 1, 0x1000))    # `wFoo:: ds 30` says it itself
+        desc = []
+        if cmt:
+            desc.append(cmt.lstrip(';').strip())
+        else:
+            j = li - 1
+            while j >= 0 and p.lines[j].kind == 'comment':
+                desc.insert(0, p.lines[j].comment.lstrip(';').strip())
+                j -= 1
+        p.vars[name] = {'name': name, 'addr': addr, 'type': 'u8' if size == 1 else 'u8[{}]'.format(size),
+                        'base': 'u8', 'size': size, 'desc': ' '.join(desc), 'bank': bank}
+
+
 def parse(src_dir, rom, syms):
-    """rom: bytes of the built ROM, syms: label -> address."""
+    """rom: bytes of the built ROM, syms: label -> CPU address (banks in build.SYM_BANK).
+    Every line's address and size come from the assembler (measure.py); ROM addresses
+    are linear (offsets in the ROM file)."""
+    import measure
     p = Parsed()
     parse_ram_inc(os.path.join(src_dir, 'ram.inc'), p)
     constdoc = p.vars.pop('__constdoc', {})
     p.constdoc = constdoc
+    walked, measured = measure.measure()
+    mkinds = macro_kinds(walked)
+    p.macro_kinds = mkinds
+    any_colon = build.GAME.get('unit_labels') == 'global'     # pret style: every global label starts a unit
+    seen = {}
 
-    files = []
-
-    def walk(fname):
-        for n, raw in enumerate(open(os.path.join(src_dir, fname), encoding='utf-8').read().split('\n'), 1):
-            m = re.match(r'^\s*INCLUDE\s+"([^"]+)"', raw, re.I)
-            if m and m.group(1).endswith('.asm'):
-                walk(m.group(1))
-            elif fname != main:
-                files.append((fname, raw, n))     # n: line number within its own file
-    main = build.GAME['main']
-    walk(main)
-
-    pc = 0
     scope = None
     unit = None
     pending_header = []
-    for idx, (fname, raw, fline) in enumerate(files):
+    ram_labels = []                                # (name, addr, bank, comment, line index) in RAM sections
+
+    def attach(idx, ln):
+        if unit is not None:
+            unit.lines.append(idx)
+            ln.group = unit.cur
+
+    for idx, s in enumerate(walked):
+        fname, raw, fline = s.file, s.raw, s.lineno
+        occ = measured.get((fname, fline))
+        k = seen.get((fname, fline), 0)
+        seen[(fname, fline)] = k + 1
+        here = occ[k] if occ and k < len(occ) else None      # (cpu addr, bank, size, ram) or not assembled
         ln = Line(fname, fline, raw)
         p.lines.append(ln)
+        if s.ctx == 'eof' or s.is_section:
+            unit = None                            # a unit never runs on into another section
+        if s.ctx == 'eof':
+            continue
         code, comment = strip_comment(raw)
         stripped = code.strip()
         cstrip = comment.strip()
+        is_ram = here is not None and here[3]
+        if here is not None:
+            ln.addr = here[0] if is_ram else build.linear(here[1], here[0])
+            ln.bank = here[1]
+        if stripped and (s.ctx == 'block' or (here is None and s.in_section and s.ctx in ('top', 'open'))):
+            # inside a MACRO / REPT / LOAD block, or a line the assembler skipped (IF branch)
+            ln.kind = 'directive' if s.ctx == 'block' else 'inactive'
+            ln.text, ln.comment, ln.addr = stripped, cstrip, None
+            if not (s.in_section is False and s.ctx == 'block'):
+                attach(idx, ln)
+            continue
         if not stripped:
             if cstrip.startswith(';@'):
                 ln.kind = 'header'
@@ -254,31 +344,29 @@ def parse(src_dir, rom, syms):
             elif cstrip:
                 ln.kind = 'comment'
                 ln.comment = cstrip
-            if unit is not None:
-                unit.lines.append(idx)
-                ln.group = unit.cur
+            attach(idx, ln)
             continue
 
         ln.comment = cstrip
         m = LABEL_RE.match(stripped)
-        if m and not stripped.upper().startswith('DEF '):
+        if m and not re.match(r'^(DEF|REDEF)\s', stripped, re.I) and not re.match(r'^\w+:?\s+MACRO\b', stripped, re.I):
             name = m.group(1) or m.group(4)
             full = name if not name.startswith('.') else '{}{}'.format(scope, name)
             if not name.startswith('.'):
                 scope = name
             ln.kind = 'label'
             ln.label = full
-            if full in syms:
-                if syms[full] != pc and unit is not None:
-                    p.warnings.append('address drift at {}: walked ${:04X}, sym ${:04X}'.format(
-                        full, pc, syms[full]))
-                pc = syms[full]
-            ln.addr = pc
-            if is_unit_label(name, m.group(2) if m.group(1) else m.group(5)):
-                if unit is not None:
-                    unit.end = pc
+            colons = m.group(2) if m.group(1) else m.group(5)
+            if is_ram:
+                if not name.startswith('.'):
+                    ram_labels.append((full, ln.addr, here[1], cstrip, idx, here[2]))
+                continue
+            if here is None:
+                ln.addr = None
+            elif (is_unit_label(name, colons) or (any_colon and not name.startswith('.') and colons)) \
+                    and s.in_section and not full.startswith('__gb_'):
                 unit = Unit(full, idx)
-                unit.start = pc
+                unit.start = unit.end = ln.addr
                 unit.header = pending_header
                 pending_header = []
                 if unit.header:
@@ -287,14 +375,13 @@ def parse(src_dir, rom, syms):
                         unit.asset = dict(hdr['asset'], doc=hdr['doc'])
                     unit.path = hdr['path']
                     keys = [re.match(r';@ (\w+):', t) for t in unit.header]      # doc lines may start with "Word:"
-                    path_only = all(not k or k.group(1) not in HEADER_KEYS or k.group(1) == 'path' for k in keys)                         and not any(t.startswith(';@ def ') for t in unit.header)
+                    path_only = all(not k or k.group(1) not in HEADER_KEYS or k.group(1) == 'path' for k in keys) \
+                        and not any(t.startswith(';@ def ') for t in unit.header)
                     if hdr['def'] or not (hdr['asset'] or path_only):
                         unit.func = hdr
                 p.units.append(unit)
-            if unit is not None:
-                unit.lines.append(idx)
-                ln.group = unit.cur
-            rest =(m.group(3) if m.group(1) else m.group(6)).strip()
+            attach(idx, ln)
+            rest = (m.group(3) if m.group(1) else m.group(6)).strip()
             if not rest:
                 continue
             stripped = rest  # instruction on the same line as the label
@@ -303,37 +390,36 @@ def parse(src_dir, rom, syms):
             p.warnings.append('{}:{}: ;@ header not directly above a label'.format(fname, fline))
             pending_header = []
 
-        word = stripped.split(None, 1)
-        mnem = word[0].lower()
-        ops = word[1] if len(word) > 1 else ''
-        if mnem == 'section':
-            sm = re.search(r'\[\$([0-9a-fA-F]+)\]', stripped)
-            pc = int(sm.group(1), 16) if sm else pc
-            ln.kind = 'directive'
+        mnem = stripped.split(None, 1)[0].lower()
+        if mnem in DIRECTIVES or here is None or is_ram:
+            if ln.kind != 'label':
+                ln.kind = 'directive'
+                ln.text = stripped
+            if not is_ram and ln.kind != 'label':
+                attach(idx, ln)
             continue
-        if mnem in ('include', 'def', 'charmap', 'assert', 'export', 'macro', 'endm'):
-            ln.kind = 'directive'
-            continue
-        if ln.kind != 'label':
-            ln.kind = 'data' if mnem in ('db', 'dw', 'ds') else 'insn'
-        ln.addr = pc
-        ln.text = stripped
-        if mnem in ('db', 'dw', 'ds'):
-            ln.size = data_size(mnem, ops)
-            ln.datakind = True
+        if mnem in SM83:
+            kind = 'insn'
+        elif mnem in DATA:
+            kind = 'data'
         else:
-            ln.size = decode(rom, pc).length
-            ln.datakind = False
-        if ln.kind == 'label':
-            # label + instruction on one line: treat as instruction line
-            ln.kind = 'data' if ln.datakind else 'insn'
-        pc += ln.size
+            kind = 'insn' if mkinds.get(mnem) == 'code' else 'data'
+            ln.macro = mnem
+        if ln.kind != 'label':
+            attach(idx, ln)
+        ln.kind = kind
+        ln.datakind = kind == 'data'
+        ln.text = stripped
+        ln.size = here[2]
         if unit is not None:
-            unit.lines.append(idx)
-            ln.group = unit.cur
             unit.joinable = False
-    if unit is not None:
-        unit.end = pc
+            unit.end = max(unit.end, ln.addr + ln.size)
+    p.ram_labels = ram_labels
+    if not os.path.exists(os.path.join(src_dir, 'ram.inc')):
+        ram_from_labels(p)
+        for name, v in build.read_consts().items():
+            if name not in p.vars and not name.startswith('__gb_'):
+                p.consts.setdefault(name, v)
 
     # resolve `;=@name` links (they may point forward) and fill each group's lines
     by_name = {u.name: u for u in p.units}

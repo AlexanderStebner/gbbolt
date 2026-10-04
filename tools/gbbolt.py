@@ -123,7 +123,7 @@ def fix_headers(project):
         if not u.annotated or u.name not in an.refs:
             continue
         refs = an.refs[u.name]
-        name = an.symbolic
+        name = lambda a: an.symbolic(a, u.name)    # noqa: E731
         st_r = {name(a) or '${:04X}'.format(a) for a in refs['reads']}
         st_w = {name(a) or '${:04X}'.format(a) for a in refs['writes']}
         keep = lambda s: not (s.startswith('r') and s in an.io_names)   # noqa: E731 - IO registers stay out
