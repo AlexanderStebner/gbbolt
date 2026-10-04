@@ -226,9 +226,18 @@ def main():
         elif step in ('verify', 'stamp', 'site'):
             if project.results is None:
                 project.verify(names or None)
+                import pickle
+                saved = os.path.join(build.OUT, 'verify_results.pickle')
                 if not names:
-                    import pickle
-                    pickle.dump((project.results, project.verify_seconds), open(os.path.join(build.OUT, 'verify_results.pickle'), 'wb'))
+                    pickle.dump((project.results, project.verify_seconds), open(saved, 'wb'))
+                elif os.path.exists(saved):
+                    # a partial run: merge these units' results into the saved ones (for `page`)
+                    try:
+                        old, secs = pickle.load(open(saved, 'rb'))
+                        old.update({n: r for n, r in project.results.items() if n in names})
+                        pickle.dump((old, secs), open(saved, 'wb'))
+                    except Exception:
+                        pass
                 # with names: those units in full; otherwise only the ones with problems
                 print_report(project, names or None, problems_only=not names and 'verify' not in args)
             if step == 'stamp':

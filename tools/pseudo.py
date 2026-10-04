@@ -14,6 +14,7 @@ Parameters and return values are tied to registers in the header:
 `def CopyBytes(src: hl, dest: de, count: bc)`, `-> carry`, `-> (a, hl)`.
 """
 import ast
+import os
 
 REGS8 = ('a', 'b', 'c', 'd', 'e', 'h', 'l')
 REGS16 = ('bc', 'de', 'hl', 'af')
@@ -281,7 +282,29 @@ def make_helpers(mem):
         'False': (False, ''),
         'None': (None, ''),
     }
+    helpers.update(game_helpers(mem))
     return helpers
+
+
+def game_helpers(mem):
+    """Helpers a game adds for its own idioms (game.json "helpers": a Python file in
+    the project whose `helpers(mem, addr)` returns {name: (function, description)};
+    addr('wTileMap') is a label's address)."""
+    import build
+    path = build.GAME.get('helpers')
+    if not path:
+        return {}
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('game_helpers', os.path.join(build.ROOT, path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    cache = {}
+
+    def addr(name):
+        if not cache:
+            cache.update(build.read_sym())
+        return cache[name]
+    return mod.helpers(mem, addr)
 
 
 HELPER_DOCS = {k: v[1] for k, v in make_helpers(Memory(bytearray(0x10000))).items()}

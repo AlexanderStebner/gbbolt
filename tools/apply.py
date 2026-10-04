@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asmparse  # noqa: E402
 import build  # noqa: E402
 
-LABEL = re.compile(r'^([A-Za-z_]\w*)(::?)\s*$')
+LABEL = re.compile(r'^([A-Za-z_]\w*)(::?)\s*(?:;.*)?$')          # a label line (a comment may follow)
 
 
 def split_units(text):
@@ -68,32 +68,45 @@ def block_file(text):
 
 def main():
     originals, done = {}, []
+    files = {}                       # path -> its lines, while editing
+
+    def lines_of(path):
+        if path not in files:
+            originals[path] = open(path, encoding='utf-8').read()
+            files[path] = originals[path].split('\n')
+        return files[path]
+
     for f in sys.argv[1:]:
         text = open(f, encoding='utf-8').read()
-        path = block_file(text)
-        if path not in originals:
-            originals[path] = open(path, encoding='utf-8').read()
-        lines = open(path, encoding='utf-8').read().split('\n')
         # `;! absorb Label` removes another unit whose code the new version takes over
         for name in re.findall(r'^;! absorb (\w+)\s*$', text, re.M):
+            lines = lines_of(build.file_of_label(name))
             s, e = unit_span(lines, name)
             del lines[s:e]
         text = re.sub(r'^;! .*\n', '', text, flags=re.M)
-        last_end = None
+        last = None                  # (path, end line) of the unit placed before
         for name, body in split_units(text):
             while body and not body[-1].strip():
                 body.pop()
-            if any(LABEL.match(l) and LABEL.match(l).group(1) == name for l in lines):
+            try:
+                path = build.file_of_label(name)     # every unit goes back to its own file
+            except KeyError:
+                path = None
+            if path is not None:
+                lines = lines_of(path)
                 s, e = unit_span(lines, name)
-            elif last_end is not None:
+            elif last is not None:
                 # a new label splitting off part of the previous unit: insert after it
-                s = e = last_end
+                path, s = last
+                lines = lines_of(path)
+                e = s
                 body = [''] + body
             else:
                 sys.exit('{}: label not found and no previous unit to insert after'.format(name))
             lines[s:e] = body
-            last_end = s + len(body)
+            last = (path, s + len(body))
             done.append(name)
+    for path, lines in files.items():
         open(path, 'w', encoding='utf-8', newline='\n').write('\n'.join(lines))
     ok, msg = build.build()
     if not ok:

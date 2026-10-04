@@ -188,8 +188,13 @@ def parse_ram_inc(path, parsed):
 
 def is_unit_label(name, colons='::'):
     """`Name::` starts a unit; `Name:` (and `jr_000_xxxx:`) is a shared entry
-    point inside one; `.name` is local."""
-    return not name.startswith('.') and not name.startswith('jr_') and colons == '::'
+    point inside one; `.name` is local. pret projects (game.json "unit_labels":
+    "global"): every global label starts a unit."""
+    if name.startswith('.') or name.startswith('__gb_'):
+        return False
+    if build.GAME.get('unit_labels') == 'global':
+        return colons in (':', '::')
+    return not name.startswith('jr_') and colons == '::'
 
 
 SM83 = {'ld', 'ldh', 'ldi', 'ldd', 'add', 'adc', 'sub', 'sbc', 'and', 'or', 'xor', 'cp', 'inc', 'dec', 'daa',
@@ -214,7 +219,7 @@ def macro_kinds(lines):
     cur = None
     for raw in texts:
         code = measure.code_part(raw).strip()
-        m = re.match(r'^MACRO\s+(\w+)', code, re.I) or re.match(r'^(\w+):?\s+MACRO\b', code, re.I)
+        m = re.match(r'^MACRO\??\s+(\w+)', code, re.I) or re.match(r'^(\w+):?\s+MACRO\b', code, re.I)
         if m:
             cur = bodies.setdefault(m.group(1), set())
             continue

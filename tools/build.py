@@ -91,8 +91,8 @@ def file_of_label(name):
     """Path of the source file that defines `name::` (or `name:`)."""
     for f in asm_files():
         path = os.path.join(SRC, f)
-        for raw in open(path, encoding='utf-8'):
-            if raw.rstrip() in (name + '::', name + ':'):
+        for raw in open(path, encoding='utf-8', errors='replace'):
+            if re.match(r'^' + re.escape(name) + r'::?\s*(;.*)?$', raw.rstrip()):
                 return path
     raise KeyError('no label ' + name)
 
