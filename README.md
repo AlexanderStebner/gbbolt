@@ -162,6 +162,7 @@ What the tools need to know about a particular game lives in its project, not in
 |---|---|
 | `game.json` | id, ROM file and its SHA1, title (default: from the cartridge header), main asm file, rgblink / rgbfix flags, the function the Code view opens with (`start`; default `MainLoop`, else the first function), the entry point and the call graph's default focus, the `rst` jump-table convention (if the game has one), extra entry points for the tracer, the memory the differential tests may use, how to draw a sprite with the game's own routine |
 | `src/folders.txt` | the virtual folders and their descriptions |
+| `src/intro.md` | optional: chapter 0 of the Book, a short story from power-on to the first level told through the code (below) |
 | `src/sound.json` | how to drive the sound engine (below) |
 | `src/ram.inc` | RAM names, types and descriptions |
 
@@ -169,6 +170,20 @@ The original ROM is optional: without it the build is checked against the `sha1`
 `game.json`, which is how the site is built in CI. Tools that edit the source find the
 file a label lives in, so a disassembly split into several files works. Not supported
 yet: bank switching (games bigger than 32 KB).
+
+## The intro chapter
+
+A game may tell its story from power-on to finishing the first level in `src/intro.md`.
+The Book shows it as chapter 0, its `##` sections are listed in the table of contents,
+and `#/book/intro` links to it. It is a small Markdown:
+
+- `# Title` (the chapter's name), `## Section`, paragraphs, `- ` lists, `**bold**`, `*italic*`;
+- `` `Name` `` links to a function, RAM variable, asset or folder of that name; anything
+  else in backticks (`` `$9C` ``, `` `rst $30` ``) is shown as code;
+- `[text](Name)` links text to the same targets, or to a URL.
+
+The build warns about names it can't link. Keep it short and quick: what the code does,
+in the order it happens, with a link on every routine worth a look.
 
 ## Sound and the Music view
 

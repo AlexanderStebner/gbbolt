@@ -319,6 +319,28 @@ def write_png(path, width, height, rgb_rows):
     open(path, 'wb').write(png)
 
 
+def read_intro():
+    """src/intro.md: the Book's optional chapter 0, a short story from power-on to the first
+    level told through the code (Markdown; `Name` links to a function, variable, asset or folder)."""
+    path = os.path.join(build.SRC, 'intro.md')
+    return open(path, encoding='utf-8').read() if os.path.exists(path) else None
+
+
+def check_intro(data):
+    """Warn about `Name`s and [text](target)s in intro.md that the viewer can't link."""
+    if not data.get('intro'):
+        return
+    known = ({u['n'] for u in data['units']} | {v['name'] for v in data['vars']}
+             | {a['name'] for a in data['assets']} | {f['path'] for f in data['folders']})
+    for m in re.finditer(r'`([^`]+)`|\]\(([^)\s]+)\)', data['intro']):
+        name = m.group(1) or m.group(2)
+        if m.group(2) and re.match(r'(https?:|#/)', name):
+            continue
+        # `code` that doesn't look like a name ($9C, rst $30, x + 1) is meant as code
+        if name not in known and (m.group(2) or re.fullmatch(r'[A-Za-z_][\w/]*', name)):
+            print('intro.md: no function, variable, asset or folder named', name)
+
+
 def write_thumbnail(assets, tilesets, path, scale=2):
     """The tilemap asset named in game.json "thumbnail" as a PNG in DMG colours (for the hub),
     or a .png under out/site/ (e.g. a poster an asset plugin wrote into gen/)."""
@@ -468,6 +490,7 @@ def generate(project):
         'vars': variables,
         'unnamed': unnamed,
         'folders': folder_list(paths),
+        'intro': read_intro(),
         'consts': consts,
         'helpers': HELPER_DOCS,
         'assets': assets,
@@ -476,6 +499,7 @@ def generate(project):
         'globalChecksum': sum(b for i, b in enumerate(project.rom) if i not in (0x14E, 0x14F)) & 0xFFFF,
         'verifySeconds': round(project.verify_seconds, 1),
     }
+    check_intro(data)
     html = open(TEMPLATE, encoding='utf-8').read()
     payload = json.dumps(data, separators=(',', ':')).replace('</', '<\\/')
     html = html.replace('/*__GBBOLT_DATA__*/null', payload)
