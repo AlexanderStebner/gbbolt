@@ -165,9 +165,14 @@ class Function(int):
         return self.pyfunc(*a, **k)
 
 
-class JumpTableView:
-    def __init__(self, entries, resolve):
-        self.entries, self.resolve = entries, resolve
+class JumpTableView(int):
+    """A table of function addresses: `Table[i]` is entry i as a callable; in arithmetic it is the table's
+    address (`mem16[Table + 2 * i]`, or passed on as an address)."""
+
+    def __new__(cls, address, entries, resolve):
+        obj = int.__new__(cls, address)
+        obj.entries, obj.resolve = entries, resolve
+        return obj
 
     def __getitem__(self, i):
         return self.resolve(self.entries[i])
@@ -505,7 +510,7 @@ class Env:
             return g.get(target) if callable(g.get(target)) else self.stub(target)
 
         for uname, entries in self.tables.items():
-            g[uname] = JumpTableView(entries, resolve)
+            g[uname] = JumpTableView(self.syms.get(uname, 0), entries, resolve)
         for u in self.parsed.units:
             if u.kind == 'code' and not (u.annotated and u.func.get('def')):
                 g[u.name] = self.stub(u.name)
