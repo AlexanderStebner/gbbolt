@@ -63,6 +63,8 @@ def load_config():
     for k in cfg['kinds'].values():
         if 'request' in k:                     # the RAM byte the request goes into (or 'request_call': a routine)
             k['request'] = addr(k['request'])
+        if 'request_addr' in k:                # with 'request_call': RAM the request byte is put into first
+            k['request_addr'] = addr(k['request_addr'])
         # 'setup': RAM written once before the request (e.g. which bank's engine plays it)
         k['setup'] = [(addr(a), v) for a, v in k.get('setup', {}).items()]
         # 'playing': one byte (the id playing, 0 = none) or a list of bytes, any of them
@@ -144,6 +146,8 @@ class Engine:
         if 'request_call' in k:                # a routine takes the request in A (RAM the game sets first: pokes)
             for a, v in (pokes or {}).items():
                 self.mem[a] = v
+            if 'request_addr' in k:
+                self.mem[k['request_addr']] = request
             self.pre_writes = self.call(k['request_call'], a=request, bank=bank or build.SYM_BANK.get(k['request_call']))
         else:
             self.mem[k['request']] = request
@@ -624,6 +628,8 @@ def render(rom, syms, cfg, kind, number, pokes=None, hz=None, max_seconds=None, 
         for i, (l, r) in enumerate(apu.render(n)):
             chans[i][0].append(l)
             chans[i][1].append(r)
+        if cfg.get('nr52_status'):                 # engines that read rNR52 to see which channels still sound
+            eng.mem[0xFF26] = (apu.regs[0x26] & 0x80) | sum(1 << i for i, c in enumerate(apu.ch) if c.on)
         count += 1
     if not count:
         return None

@@ -41,5 +41,11 @@
     "repo": "AlexanderStebner/pokered-gbbolt",
     "strict": false,
     "description": "The whole of Kanto: a Pokédex card for all 151 Pokémon, every map with its trainers and events, battles, menus, the game's screens in Super Game Boy colours, and all songs and cries. Based on the pret/pokered disassembly."
+  },
+  {
+    "id": "spaceinvaders",
+    "title": "Space Invaders",
+    "repo": "AlexanderStebner/spaceinvaders-gbbolt",
+    "description": "The march of the 40 invaders, shields eaten away pixel by pixel, the UFO's 300-point shot, the link-cable duel, coffee breaks, the ending and a pile of secret codes."
   }
 ]
