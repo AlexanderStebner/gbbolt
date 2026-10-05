@@ -157,6 +157,10 @@ a.k-fn, a.k-var { text-decoration: none; } a.k-fn:hover, a.k-var:hover { text-de
 .imgwrap.scroll { max-width: 100%; overflow-x: auto; padding-bottom: 6px; }
 .imark { position: absolute; padding: 0; border: 2px solid var(--accent); box-shadow: 0 0 0 1px rgba(255, 255, 255, .8); background: transparent; border-radius: 3px; cursor: pointer; opacity: .8; }
 .imark:hover { opacity: 1; background: rgba(37, 99, 235, .15); }
+.imark.sel { opacity: 1; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.mpop { position: absolute; z-index: 5; line-height: 1.45; font-size: 13px; background: var(--panel); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 8px 26px 8px 10px; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); white-space: normal; text-align: left; }
+.mpopx { position: absolute; top: 3px; right: 5px; border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 4px; }
+.mpopx:hover { color: var(--text); }
 .bfn { max-width: 980px; margin: 0 0 26px; scroll-margin-top: 10px; }
 .bfn h2 { font: 600 15px var(--mono); margin: 0 0 4px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .bfn h2 .ad { color: var(--muted); font-weight: 400; }
@@ -2014,6 +2018,27 @@ async function imagePixels(a) {
   const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
+// a clicked map mark: the same text as the note under the picture, in a box right next to the spot (on a big
+// scrolling map the note is far away); closes with its button, Escape, or a click anywhere else
+function showMarkPopup(inner, btn, html, x, y, w, width) {
+  $$('.mpop').forEach(p => p.remove());
+  $$('.imark.sel').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  const p = document.createElement('div');
+  p.className = 'mpop';
+  p.innerHTML = `<button class="mpopx" title="close">×</button>${html}`;
+  inner.appendChild(p);
+  const room = width - (x + w);                  // to the right of the spot, or left of it when there is no room
+  const pw = Math.min(320, Math.max(200, room - 16));
+  p.style.width = pw + 'px';
+  p.style.left = (room >= pw + 12 ? x + w + 8 : Math.max(0, x - pw - 8)) + 'px';
+  p.style.top = Math.max(0, y - 6) + 'px';
+  const close = () => { p.remove(); btn.classList.remove('sel'); document.removeEventListener('click', away, true); document.removeEventListener('keydown', esc); };
+  const away = e => { if (!p.contains(e.target) && e.target !== btn) close(); };
+  const esc = e => { if (e.key === 'Escape') close(); };
+  p.querySelector('.mpopx').onclick = close;
+  setTimeout(() => { document.addEventListener('click', away, true); document.addEventListener('keydown', esc); }, 0);
+}
 function drawImage(a, el, size) {
   const W = a.width, H = a.height, large = size === 'large';
   const scale = large ? (a.scale || 3) : 0;
@@ -2048,7 +2073,12 @@ function drawImage(a, el, size) {
     b.className = 'imark'; b.title = m.label + (m.text ? ' — ' + m.text : '') + (m.say ? ' “' + m.say + '”' : '') + (m.more ? '\n' + m.more : '');
     b.style.cssText = `left:${m.x * scale}px;top:${m.y * scale}px;width:${m.w * scale}px;height:${m.h * scale}px`;
     if (!m.w || !m.h) return b;      // no spot on the picture (e.g. the map's wild Pokemon): only in the list
-    b.onclick = () => { note.innerHTML = markHtml(m); $$('.mlist tr', el).forEach((r, k) => r.classList.toggle('on', k === i)); };
+    b.onclick = e => {
+      e.stopPropagation();
+      note.innerHTML = markHtml(m);
+      $$('.mlist tr', el).forEach((r, k) => r.classList.toggle('on', k === i));
+      showMarkPopup(inner, b, markHtml(m), m.x * scale, m.y * scale, m.w * scale, W * scale);
+    };
     inner.appendChild(b);
     return b;
   });
