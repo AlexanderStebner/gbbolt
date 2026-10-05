@@ -30,6 +30,12 @@
     "description": "Mario's paddle and the 32 stages: sliding brick rows split by the LCD interrupt, walls that come down, bonus stages, the ball's speed tables, the game's own demo and ending, and the sound engine."
   },
   {
+    "id": "dragonslayer",
+    "title": "Dragon Slayer I",
+    "repo": "AlexanderStebner/dragonslayer-gbbolt",
+    "description": "Falcom's action RPG on one big map: both packed world maps unpacked by the game with every landmark marked, the 32 monster kinds, the turns, the spells, the thieves and the dragon, and the sound engine."
+  },
+  {
     "id": "pokered",
     "title": "Pokémon Red",
     "repo": "AlexanderStebner/pokered-gbbolt",
