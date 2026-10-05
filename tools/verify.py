@@ -48,12 +48,16 @@ def reg_value(cpu, reg):
 
 
 def norm(reg, v):
+    if v is None:                       # the pseudo-code returned nothing where a value was declared
+        return None
     if reg in ('carry', 'zero'):
         return bool(v)
     return int(v) & (0xFFFF if reg in REGS16 else 0xFF)
 
 
 def fmt(v):
+    if v is None:
+        return 'nothing'
     return str(v) if isinstance(v, bool) else '${:X}'.format(v)
 
 
