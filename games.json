@@ -24,6 +24,12 @@
     "description": "Two laps against the clock: all 8 courses as whole maps with every item marked, the track pieces they are built from, bike physics, the computer rider and the sound engine."
   },
   {
+    "id": "alleyway",
+    "title": "Alleyway",
+    "repo": "AlexanderStebner/alleyway-gbbolt",
+    "description": "Mario's paddle and the 32 stages: sliding brick rows split by the LCD interrupt, walls that come down, bonus stages, the ball's speed tables, the game's own demo and ending, and the sound engine."
+  },
+  {
     "id": "pokered",
     "title": "Pokémon Red",
     "repo": "AlexanderStebner/pokered-gbbolt",
