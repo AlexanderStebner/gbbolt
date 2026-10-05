@@ -281,7 +281,7 @@ LIBRARY_JS = '''<script>
 def main():
     games = json.load(open(sys.argv[1], encoding='utf-8'))
     site = sys.argv[2]
-    engine = os.environ.get('GBBOLT_ENGINE_REPO', 'AlexanderStebner/gbbolt')
+    engine = os.environ.get('GBBOLT_ENGINE_REPO', 'gbbolt/gbbolt')
     cards = []
     for added, g in enumerate(games):     # games.json lists the games in the order they were added
         path = os.path.join(site, g['id'], 'summary.json')

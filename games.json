@@ -2,50 +2,50 @@
   {
     "id": "tetris",
     "title": "Tetris",
-    "repo": "AlexanderStebner/tetris-gbbolt",
+    "repo": "gbbolt/tetris-gbbolt",
     "description": "The whole game: menus, falling pieces, line clears, the 2-player link mode, the rocket and shuttle endings and Hirokazu Tanaka's sound engine."
   },
   {
     "id": "drmario",
     "title": "Dr. Mario",
-    "repo": "AlexanderStebner/drmario-gbbolt",
+    "repo": "gbbolt/drmario-gbbolt",
     "description": "Viruses, capsules and chain reactions; the 2-player link mode with its danger music, the underwater cutscenes and the title demo, all played by the game's own code."
   },
   {
     "id": "kwirk",
     "title": "Kwirk",
-    "repo": "AlexanderStebner/kwirk-gbbolt",
+    "repo": "gbbolt/kwirk-gbbolt",
     "description": "The tomato's puzzle rooms: all 150 rooms drawn by the game itself, blocks, holes and turnstiles, random courses, the 2-player link mode and the endings at Kwirk's house."
   },
   {
     "id": "motocross",
     "title": "Motocross Maniacs",
-    "repo": "AlexanderStebner/motocross-gbbolt",
+    "repo": "gbbolt/motocross-gbbolt",
     "description": "Two laps against the clock: all 8 courses as whole maps with every item marked, the track pieces they are built from, bike physics, the computer rider and the sound engine."
   },
   {
     "id": "alleyway",
     "title": "Alleyway",
-    "repo": "AlexanderStebner/alleyway-gbbolt",
+    "repo": "gbbolt/alleyway-gbbolt",
     "description": "Mario's paddle and the 32 stages: sliding brick rows split by the LCD interrupt, walls that come down, bonus stages, the ball's speed tables, the game's own demo and ending, and the sound engine."
   },
   {
     "id": "dragonslayer",
     "title": "Dragon Slayer I",
-    "repo": "AlexanderStebner/dragonslayer-gbbolt",
+    "repo": "gbbolt/dragonslayer-gbbolt",
     "description": "Falcom's action RPG on one big map: both packed world maps unpacked by the game with every landmark marked, the 32 monster kinds, the turns, the spells, the thieves and the dragon, and the sound engine."
   },
   {
     "id": "pokered",
     "title": "Pokémon Red",
-    "repo": "AlexanderStebner/pokered-gbbolt",
+    "repo": "gbbolt/pokered-gbbolt",
     "strict": false,
     "description": "The whole of Kanto: a Pokédex card for all 151 Pokémon, every map with its trainers and events, battles, menus, the game's screens in Super Game Boy colours, and all songs and cries. Based on the pret/pokered disassembly."
   },
   {
     "id": "spaceinvaders",
     "title": "Space Invaders",
-    "repo": "AlexanderStebner/spaceinvaders-gbbolt",
+    "repo": "gbbolt/spaceinvaders-gbbolt",
     "description": "The march of the 40 invaders, shields eaten away pixel by pixel, the UFO's 300-point shot, the link-cable duel, coffee breaks, the ending and a pile of secret codes."
   }
 ]

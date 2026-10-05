@@ -12,7 +12,7 @@ the result: code and pseudo-code side by side, a book, call graph, RAM map, the 
 graphics, and its music as a piano roll with mute / solo per channel.
 
 This repository is the engine. Each game lives in its own repository (for example
-[tetris-gbbolt](https://github.com/AlexanderStebner/tetris-gbbolt)) and is listed in
+[tetris-gbbolt](https://github.com/gbbolt/tetris-gbbolt)) and is listed in
 [`games.json`](games.json); the site above is built from all of them.
 
 ## Using it on a game
