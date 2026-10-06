@@ -1,15 +1,23 @@
 # Builds every game of games.json from source (no ROMs needed), verifies it, renders
 # its audio, writes the viewers plus the hub page and deploys them to GitHub Pages.
+# A game whose commit and the engine are unchanged since its last build comes from the
+# cache; the weekly run (and a manual run with "full") builds every game again.
 name: Site
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      full:
+        description: 'Build every game again, ignoring the cache'
+        type: boolean
+        default: false
   repository_dispatch:
     types: [game-updated]
   schedule:
     - cron: '17 3 * * *'          # nightly, picks up pushes to the game repositories
+    - cron: '47 4 * * 0'          # weekly, everything built again
 
 permissions:
   contents: read
@@ -42,15 +50,17 @@ jobs:
       - name: ffmpeg
         run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
 
-      - name: Asset plugin cache
+      - name: Asset plugin and site cache
         uses: actions/cache@v4
         with:
-          path: .gencache
+          path: |
+            .gencache
+            .sitecache
           key: gencache-${{ github.run_id }}
           restore-keys: gencache-
 
       - name: Build all games and the hub
-        run: python tools/ci_build.py games.json _site
+        run: python tools/ci_build.py games.json _site ${{ (github.event.schedule == '47 4 * * 0' || inputs.full) && '--full' || '' }}
 
       - uses: actions/upload-pages-artifact@v3
         with:
