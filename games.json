@@ -47,5 +47,12 @@
     "title": "Space Invaders",
     "repo": "gbbolt/spaceinvaders-gbbolt",
     "description": "The march of the 40 invaders, shields eaten away pixel by pixel, the UFO's 300-point shot, the link-cable duel, coffee breaks, the ending and a pile of secret codes."
+  },
+  {
+    "id": "dwm",
+    "title": "Dragon Warrior Monsters",
+    "repo": "gbbolt/dwm-gbbolt",
+    "strict": false,
+    "description": "Work in progress: the whole 2 MiB Game Boy Color cartridge, 128 banks, being explained bank by bank - with the game's opening played on an emulated Game Boy Color, in its own colours."
   }
 ]

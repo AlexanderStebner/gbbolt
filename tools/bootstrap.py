@@ -1,6 +1,6 @@
 """One-time bootstrap: trace the ROM and create the initial disassembly in src/.
 
-    python tools/bootstrap.py [--force]
+    python tools/bootstrap.py [--force] [--coverage FILE]
 
 Runs tools/trace.py to produce <rom>.sym (code/data map), then mgbdis
 (from ../mgbdis next to the project, or $GBBOLT_MGBDIS) with the vector labels it normally hard-codes removed - the
@@ -26,14 +26,16 @@ def main():
     os.makedirs(SRC, exist_ok=True)
     if os.path.exists(os.path.join(SRC, 'bank_000.asm')) and '--force' not in sys.argv:
         sys.exit('src/ already exists and is hand-edited; pass --force to regenerate it')
-    subprocess.check_call([sys.executable, os.path.join(HERE, 'trace.py'), ROM])
+    subprocess.check_call([sys.executable, os.path.join(HERE, 'trace.py'), ROM] +
+                          [a for a in sys.argv[1:] if a != '--force'])     # e.g. --coverage FILE
 
     source = open(MGBDIS, encoding='utf-8').read()
     marker = 'gbc_symbols = ['
     patch = ("default_symbols = [s for s in default_symbols\n"
              "                   if int(s.split()[0].split(':')[1], 16) >= 0x104]\n")
     source = source.replace(marker, patch + marker, 1)
-    sys.argv = ['mgbdis.py', ROM, '--tiny', '--output-dir', SRC, '--hli', 'hli',
+    tiny = ['--tiny'] if os.path.getsize(ROM) <= 0x8000 else []
+    sys.argv = ['mgbdis.py', ROM] + tiny + ['--output-dir', SRC, '--hli', 'hli',
                 '--ldh_a8', 'ldh_ffa8', '--indent-tabs', '--overwrite']
     sys.path.insert(0, os.path.dirname(MGBDIS))
     exec(compile(source, MGBDIS, 'exec'), {'__name__': '__main__', '__file__': MGBDIS})
