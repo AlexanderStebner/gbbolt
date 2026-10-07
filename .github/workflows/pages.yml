@@ -48,6 +48,7 @@ jobs:
           dirname "$(find "$HOME/rgbds" -name rgbasm -type f | head -1)" >> "$GITHUB_PATH"
 
       - name: ffmpeg
+        timeout-minutes: 10        # apt mirrors sometimes hang; fail fast instead of waiting for hours
         run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
 
       - name: Asset plugin and site cache
