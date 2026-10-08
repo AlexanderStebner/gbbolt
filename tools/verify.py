@@ -193,6 +193,13 @@ def run_limited(fn, args, seconds=PSEUDO_SECONDS):
         timer.cancel()
 
 
+def sram_bank(mbc, mem, n):
+    """The contents of cartridge RAM bank n, switched in or not."""
+    if mbc is None or mbc.ram_bank == n:
+        return bytes(mem[0xA000:0xC000])
+    return mbc.saved_ram.get(n, bytes(0x2000))
+
+
 def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
     obs_in, obs_out, obs_rd, obs_wr = set(), set(), set(), set()
     params = sig.params
@@ -283,10 +290,15 @@ def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
 
         diffs = []
         scratch = scratch_ram(env)
+        cpu_view, pseudo_view = cpu.mem, env.mem.data
+        if build.BANKED:        # cartridge RAM: compare the bank that was in at the start (a far call may switch it)
+            cpu_view, pseudo_view = bytearray(cpu.mem), bytearray(env.mem.data)
+            cpu_view[0xA000:0xC000] = sram_bank(cpu.mbc, cpu.mem, 0)
+            pseudo_view[0xA000:0xC000] = sram_bank(env.mem.mbc, env.mem.data, 0)
         for a in range(0x8000, 0x10000):
             if a in STACK_ZONE or a in scratch:
                 continue
-            if cpu.mem[a] != env.mem.data[a]:
+            if cpu_view[a] != pseudo_view[a]:
                 diffs.append(a)
         rets = sig.returns
         if len(rets) == 1:
