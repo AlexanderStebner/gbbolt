@@ -80,7 +80,10 @@ def load_config():
     if mc:
         mc['structs'] = [addr(s) for s in mc['structs']]
     # 'loop_channels': {'count', 'fields': [[RAM name, bytes per channel], ...], 'active': RAM name (a byte per
-    # channel, 0 = unused)}: a channel loops when its fields repeat an earlier state (engines without pattern lists)
+    # channel, 0 = unused)}: a channel loops when its fields repeat an earlier state (engines without pattern lists).
+    # Channel records of several bytes: 'stride' (bytes from one channel's record to the next; the fields and
+    # 'active' are then addresses in channel 0's record) and 'active_free' (the value of 'active' that marks an
+    # unused channel instead of 0).
     lc = cfg.get('loop_channels')
     if lc:
         lc['fields'] = [(addr(a), n) for a, n in lc['fields']]
@@ -102,6 +105,8 @@ def playing(mem, k):
     """The id playing for a kind (0 = none); with a list of bytes: 1 while any is set."""
     p = k['playing']
     if isinstance(p, list):
+        if 'playing_free' in k:              # engines that mark a free channel with a value ($FF): any other plays
+            return int(any(mem[a] != k['playing_free'] for a in p))
         mask = k.get('playing_mask', 0xFF)
         return int(any(mem[a] & mask for a in p))
     return mem[p]
@@ -599,6 +604,12 @@ def render(rom, syms, cfg, kind, number, pokes=None, hz=None, max_seconds=None, 
     lc = cfg.get('loop_channels')
     states = [{} for _ in range(lc['count'])] if lc and k.get('loops') else None
     prev_state, looped = [None] * (lc['count'] if lc else 0), {}
+
+    def chan_active(mem, i):
+        if not lc.get('active'):
+            return True
+        v = mem[lc['active'] + i * lc.get('stride', 1)]
+        return v != lc['active_free'] if 'active_free' in lc else bool(v)
     for writes in eng.frames(kind, number, int(k['max_seconds'] * FRAME_HZ), pokes):
         for a, v in writes:
             apu.write(a, v)
@@ -606,16 +617,17 @@ def render(rom, syms, cfg, kind, number, pokes=None, hz=None, max_seconds=None, 
         if states is not None and tl.loop is None:      # each channel's state repeats: it loops from there
             mem = eng.mem
             for i in range(lc['count']):
-                if i in looped or (lc.get('active') and not mem[lc['active'] + i]):
+                if i in looped or not chan_active(mem, i):
                     continue
-                st = b''.join(bytes(mem[a + i * n:a + i * n + n]) for a, n in lc['fields'])
+                st = b''.join(bytes(mem[a + i * lc.get('stride', n):a + i * lc.get('stride', n) + n])
+                              for a, n in lc['fields'])
                 if st != prev_state[i]:                  # (compared where it changes: at the notes)
                     if st in states[i]:
                         looped[i] = states[i][st]
                     else:
                         states[i][st] = count
                     prev_state[i] = st
-            active = [i for i in range(lc['count']) if not lc.get('active') or mem[lc['active'] + i]]
+            active = [i for i in range(lc['count']) if chan_active(mem, i)]
             if active and all(i in looped for i in active):   # the song repeats once every channel has looped
                 tl.loop = (max(looped[i] for i in active), count)
         if fixed_loop and count >= fixed_loop[1]:
