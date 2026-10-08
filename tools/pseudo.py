@@ -275,6 +275,9 @@ def make_helpers(mem):
         'pop_return_address': (_hw('pop_return_address', 'stack manipulation'),
                                'Remove the return address from the stack and return it'),
         'goto': (_hw('goto', 'tail jump'), 'Jump to an address (does not return here)'),
+        'far_call': (_hw('far_call', 'far call with a computed bank / entry'),
+                     'Call entry `entry` of bank `bank`\'s table of far-callable routines (a far call whose '
+                     'bank and entry are computed at run time)'),
         'link_transfer': (_hw('link_transfer', 'link cable'),
                           'Send a byte over the link cable and wait for the byte coming back '
                           '(internal clock: we drive the transfer); returns the received byte'),
