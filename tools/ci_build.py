@@ -80,7 +80,8 @@ def main():
         gen = os.path.join(root, 'out', 'site', 'gen')
         if os.path.isdir(cache):
             shutil.copytree(cache, gen, dirs_exist_ok=True)
-        if audio:
+        game_src = json.load(open(os.path.join(root, 'game.json'), encoding='utf-8')).get('src', 'src')
+        if audio and os.path.exists(os.path.join(root, game_src, 'sound.json')):   # games without a sound config yet
             run([sys.executable, os.path.join(HERE, 'audio.py')], root, env)
         # "strict": false in games.json: verify failures are shown on the page but don't stop the build
         strict = ['--strict'] if g.get('strict', True) else []
