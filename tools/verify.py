@@ -228,7 +228,7 @@ def difftest(env, unit, fn, sig, rom, res, trials=TRIALS):
         regs['f'] = rng.randrange(16) << 4
         args = {}
         for pname, reg in params:
-            if pname in ns:
+            if isinstance(ns.get(pname), (int, bool)):          # set by a test line (not a helper of the same name)
                 v = ns[pname]
             else:
                 v = rng.randrange(0x10000 if reg in REGS16 else 0x100)
@@ -376,7 +376,10 @@ def _worker_test(name):
     env, u = _W['env'], _W['units'][name]
     fn, sig, _ = env.compiled[name]
     res = Result(u)
-    difftest(env, u, fn, sig, _W['rom'], res)
+    try:
+        difftest(env, u, fn, sig, _W['rom'], res)
+    except Exception as e:                       # one broken unit must not stop the others
+        res.errors.append('test harness failed: {}: {}'.format(type(e).__name__, e))
     return name, {k: getattr(res, k) for k in ('errors', 'trials', 'passed', 'skip', 'example', 'observed')}
 
 
@@ -423,7 +426,10 @@ def verify_all(parsed, analysis, syms, rom, only=None, jobs=None):
             for k, v in pre[u.name].items():
                 setattr(res, k, list(res.errors) + v if k == 'errors' else v)
         elif not unknown and (only is None or u.name in only):
-            difftest(env, u, fn, sig, rom, res)
+            try:
+                difftest(env, u, fn, sig, rom, res)
+            except Exception as e:               # one broken unit must not stop the others
+                res.errors.append('test harness failed: {}: {}'.format(type(e).__name__, e))
         header_check(u, sig, analysis, res)
         if res.errors:
             res.status = 'failing'
