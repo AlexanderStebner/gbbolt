@@ -185,7 +185,9 @@ def collect(project, site_dir):
         except Exception:  # noqa: BLE001 - one broken plugin must not stop the site
             err = traceback.format_exc()
             print('asset plugin {} failed:\n{}'.format(name, err), file=sys.stderr)
-            out.append({'name': name, 'type': 'error', 'group': 'errors', 'error': err.strip().splitlines()[-1]})
+            out.append({'name': name, 'type': 'error', 'group': 'errors', 'error': err.strip().splitlines()[-1],
+                        'title': 'assets/{}.py failed'.format(name), 'subtitle': err.strip().splitlines()[-1],
+                        'doc': [], 'users': [], 'generated': 'assets/{}.py'.format(name)})
             continue
         for a in assets:
             a.setdefault('group', getattr(mod, 'GROUP', 'more'))
